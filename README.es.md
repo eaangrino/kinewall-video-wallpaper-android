@@ -1,5 +1,8 @@
 # Kinewall Video Wallpaper
 
+> [!WARNING]
+> Este proyecto está en una fase temprana de desarrollo, por lo que puede contener fallos o comportamientos inesperados. De momento ha sido probado en un Xiaomi Redmi Note 13.
+
 Live wallpaper de video para Android, implementado de forma nativa con Kotlin, `WallpaperService` y `MediaPlayer`.
 
 Kinewall está pensado para mantener una implementación pequeña y nativa, sin Flutter, React Native, Ionic, WebView ni frameworks de renderizado adicionales. El video se reproduce directamente sobre el `Surface` del wallpaper, manteniendo una ruta de reproducción simple y permitiendo que Android utilice su stack multimedia y decodificación por hardware cuando el dispositivo lo soporte.
