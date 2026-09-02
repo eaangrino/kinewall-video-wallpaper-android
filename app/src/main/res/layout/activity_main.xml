@@ -10,7 +10,7 @@
         android:id="@+id/buttonSelectVideo"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="Seleccionar video" />
+        android:text="Select video" />
 
     <TextView
         android:id="@+id/textSelectedVideo"
@@ -18,7 +18,7 @@
         android:layout_height="wrap_content"
         android:layout_marginTop="24dp"
         android:gravity="center"
-        android:text="Ningún video seleccionado"
+        android:text="No video selected"
         android:textSize="16sp" />
 
     <RadioGroup
@@ -31,20 +31,20 @@
             android:id="@+id/radioStretch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Estirar" />
+            android:text="Stretch" />
 
         <RadioButton
             android:id="@+id/radioCrop"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Rellenar y recortar" />
+            android:text="Fill and crop" />
 
         <Button
             android:id="@+id/buttonApplyWallpaper"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:layout_marginTop="32dp"
-            android:text="Aplicar fondo de pantalla" />
+            android:text="Apply wallpaper" />
 
     </RadioGroup>
 </LinearLayout>
