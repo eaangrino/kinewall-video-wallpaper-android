@@ -28,7 +28,7 @@ class MainActivity : AppCompatActivity() {
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
             } catch (_: SecurityException) {
-                // Algunos proveedores pueden no permitir permisos persistentes.
+                // Some providers may not allow persistable permissions.
             }
 
             getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
