@@ -1,4 +1,4 @@
-# Kinewall Video Wallpaper
+# KineWall — Video Wallpaper for Android
 
 > [!WARNING]
 > This project is in an early stage of development and may contain bugs or unexpected behavior. At the moment, it has been tested on a Xiaomi Redmi Note 13.
