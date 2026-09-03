@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
 import android.widget.RadioButton
 import android.widget.RadioGroup
@@ -93,6 +94,8 @@ class MainActivity : AppCompatActivity() {
 
         val buttonSelectVideo: Button = findViewById(R.id.buttonSelectVideo)
         val buttonExportDiagnostics: Button = findViewById(R.id.buttonExportDiagnostics)
+        buttonExportDiagnostics.visibility =
+            if (AppConfig.LOGGER_ENABLED) View.VISIBLE else View.GONE
         textSelectedVideo = findViewById(R.id.textSelectedVideo)
 
         val radioGroupScaleMode: RadioGroup = findViewById(R.id.radioGroupScaleMode)
@@ -145,9 +148,11 @@ class MainActivity : AppCompatActivity() {
             videoPicker.launch(arrayOf("video/*"))
         }
 
-        buttonExportDiagnostics.setOnClickListener {
-            DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_REQUESTED")
-            diagnosticsExporter.launch(diagnosticsFileName())
+        if (AppConfig.LOGGER_ENABLED) {
+            buttonExportDiagnostics.setOnClickListener {
+                DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_REQUESTED")
+                diagnosticsExporter.launch(diagnosticsFileName())
+            }
         }
 
         loadSelectedVideo()

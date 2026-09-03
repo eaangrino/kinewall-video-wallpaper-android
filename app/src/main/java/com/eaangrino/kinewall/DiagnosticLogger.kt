@@ -26,13 +26,19 @@ object DiagnosticLogger {
     private const val EXPORT_TIMEOUT_SECONDS = 10L
 
     private val initialized = AtomicBoolean(false)
-    private val executor = Executors.newSingleThreadExecutor { runnable ->
-        Thread(runnable, "kinewall-diagnostics").apply {
-            isDaemon = true
+    private val executor by lazy {
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "kinewall-diagnostics").apply {
+                isDaemon = true
+            }
         }
     }
 
     fun initialize(context: Context) {
+        if (!AppConfig.LOGGER_ENABLED) {
+            return
+        }
+
         if (!initialized.compareAndSet(false, true)) {
             return
         }
@@ -51,6 +57,10 @@ object DiagnosticLogger {
         details: String? = null,
         throwable: Throwable? = null
     ) {
+        if (!AppConfig.LOGGER_ENABLED) {
+            return
+        }
+
         val applicationContext = context.applicationContext
         val safeEvent = sanitize(event)
         val safeDetails = details?.let(::sanitize)
@@ -96,6 +106,10 @@ object DiagnosticLogger {
     }
 
     fun exportTo(context: Context, outputStream: OutputStream) {
+        if (!AppConfig.LOGGER_ENABLED) {
+            return
+        }
+
         val applicationContext = context.applicationContext
 
         val exportTask = executor.submit {

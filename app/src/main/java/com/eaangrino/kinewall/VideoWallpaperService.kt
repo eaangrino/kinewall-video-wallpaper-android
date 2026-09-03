@@ -50,9 +50,11 @@ class VideoWallpaperService : WallpaperService() {
         super.onCreate()
         DiagnosticLogger.initialize(this)
 
-        displayManager = getSystemService(DisplayManager::class.java)
-        lastDisplayRotation = defaultDisplayRotation()
-        displayManager?.registerDisplayListener(displayListener, null)
+        if (AppConfig.LOGGER_ENABLED) {
+            displayManager = getSystemService(DisplayManager::class.java)
+            lastDisplayRotation = defaultDisplayRotation()
+            displayManager?.registerDisplayListener(displayListener, null)
+        }
 
         DiagnosticLogger.log(
             this,
@@ -139,7 +141,9 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         init {
-            mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
+            if (AppConfig.LOGGER_ENABLED) {
+                mainHandler.postDelayed(heartbeatRunnable, HEARTBEAT_INTERVAL_MS)
+            }
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
