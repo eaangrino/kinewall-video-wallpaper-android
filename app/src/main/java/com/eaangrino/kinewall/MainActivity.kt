@@ -5,6 +5,7 @@ import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.provider.OpenableColumns
 import android.view.View
 import android.widget.Button
 import android.widget.RadioButton
@@ -20,6 +21,7 @@ import java.util.Locale
 class MainActivity : AppCompatActivity() {
 
     private lateinit var textSelectedVideo: TextView
+    private lateinit var buttonApplyWallpaper: Button
 
     private val videoPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
@@ -101,7 +103,7 @@ class MainActivity : AppCompatActivity() {
         val radioGroupScaleMode: RadioGroup = findViewById(R.id.radioGroupScaleMode)
         val radioStretch: RadioButton = findViewById(R.id.radioStretch)
         val radioCrop: RadioButton = findViewById(R.id.radioCrop)
-        val buttonApplyWallpaper: Button = findViewById(R.id.buttonApplyWallpaper)
+        buttonApplyWallpaper = findViewById(R.id.buttonApplyWallpaper)
 
         buttonApplyWallpaper.setOnClickListener {
             DiagnosticLogger.log(this, "OPEN_LIVE_WALLPAPER_PICKER")
@@ -118,7 +120,7 @@ class MainActivity : AppCompatActivity() {
 
             startActivity(intent)
         }
-        
+
         val preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
 
         when (preferences.getString(KEY_SCALE_MODE, SCALE_MODE_CROP)) {
@@ -165,11 +167,39 @@ class MainActivity : AppCompatActivity() {
 
         if (uri != null) {
             showSelectedVideo(uri)
+        } else {
+            buttonApplyWallpaper.isEnabled = false
         }
     }
 
     private fun showSelectedVideo(uri: Uri) {
-        textSelectedVideo.text = uri.toString()
+        textSelectedVideo.text = selectedVideoName(uri)
+        buttonApplyWallpaper.isEnabled = true
+    }
+
+    private fun selectedVideoName(uri: Uri): String {
+        val displayName = try {
+            contentResolver.query(
+                uri,
+                arrayOf(OpenableColumns.DISPLAY_NAME),
+                null,
+                null,
+                null
+            )?.use { cursor ->
+                val displayNameColumn = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME)
+                if (displayNameColumn >= 0 && cursor.moveToFirst()) {
+                    cursor.getString(displayNameColumn)
+                } else {
+                    null
+                }
+            }
+        } catch (_: Exception) {
+            null
+        }
+
+        return displayName
+            ?: uri.lastPathSegment
+            ?: getString(R.string.selected_video_fallback)
     }
 
     private fun diagnosticsFileName(): String {

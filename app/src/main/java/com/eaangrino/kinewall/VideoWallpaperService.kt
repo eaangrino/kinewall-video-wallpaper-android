@@ -1,5 +1,6 @@
 package com.eaangrino.kinewall
 
+import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.hardware.display.DisplayManager
 import android.media.MediaPlayer
@@ -127,6 +128,18 @@ class VideoWallpaperService : WallpaperService() {
     inner class VideoWallpaperEngine : Engine() {
 
         private val mainHandler = Handler(Looper.getMainLooper())
+        private val preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
+        private val preferenceChangeListener =
+            SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
+                if (key == KEY_VIDEO_URI || key == KEY_SCALE_MODE) {
+                    mainHandler.post {
+                        reloadConfiguredVideo(
+                            reason = "preference_changed_$key",
+                            preservePosition = key == KEY_SCALE_MODE
+                        )
+                    }
+                }
+            }
 
         private var mediaPlayer: MediaPlayer? = null
         private var isPrepared = false
@@ -140,6 +153,10 @@ class VideoWallpaperService : WallpaperService() {
             heartbeatScheduled = false
             inspectPlaybackState()
             scheduleHeartbeat()
+        }
+
+        init {
+            preferences.registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         }
 
         override fun onSurfaceCreated(holder: SurfaceHolder) {
@@ -238,9 +255,59 @@ class VideoWallpaperService : WallpaperService() {
                     playerSnapshot(mediaPlayer)
             )
 
+            preferences.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener)
             mainHandler.removeCallbacksAndMessages(null)
             releasePlayer("engine_destroyed")
             super.onDestroy()
+        }
+
+        private fun reloadConfiguredVideo(
+            reason: String,
+            preservePosition: Boolean
+        ) {
+            if (!surfaceAvailable) {
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "VIDEO_CONFIGURATION_RELOAD_SKIPPED",
+                    "reason=$reason, surfaceAvailable=false"
+                )
+                return
+            }
+
+            val holder = surfaceHolder
+            if (!holder.surface.isValid) {
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "VIDEO_CONFIGURATION_RELOAD_SKIPPED",
+                    "reason=$reason, surfaceValid=false"
+                )
+                return
+            }
+
+            val videoUriString = preferences.getString(KEY_VIDEO_URI, null)
+            if (videoUriString == null) {
+                releasePlayer("configuration_reload_without_video")
+                return
+            }
+
+            val resumePositionMs = if (preservePosition) {
+                mediaPlayer?.let { player -> safeCurrentPosition(player) }
+            } else {
+                null
+            }
+
+            DiagnosticLogger.log(
+                this@VideoWallpaperService,
+                "VIDEO_CONFIGURATION_RELOAD",
+                "reason=$reason, preservePosition=$preservePosition, " +
+                    "resumePositionMs=$resumePositionMs"
+            )
+
+            createAndPreparePlayer(
+                holder,
+                Uri.parse(videoUriString),
+                resumePositionMs
+            )
         }
 
         private fun createAndPreparePlayer(
