@@ -1,16 +1,21 @@
 package com.eaangrino.kinewall
 
+import android.app.WallpaperManager
+import android.content.ComponentName
 import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
+import android.view.View
 import android.widget.Button
-import android.widget.TextView
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.appcompat.app.AppCompatActivity
 import android.widget.RadioButton
 import android.widget.RadioGroup
-import android.app.WallpaperManager
-import android.content.ComponentName
+import android.widget.TextView
+import android.widget.Toast
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.appcompat.app.AppCompatActivity
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -19,6 +24,7 @@ class MainActivity : AppCompatActivity() {
     private val videoPicker =
         registerForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
             if (uri == null) {
+                DiagnosticLogger.log(this, "VIDEO_PICKER_CANCELLED")
                 return@registerForActivityResult
             }
 
@@ -27,8 +33,13 @@ class MainActivity : AppCompatActivity() {
                     uri,
                     Intent.FLAG_GRANT_READ_URI_PERMISSION
                 )
-            } catch (_: SecurityException) {
-                // Some providers may not allow persistable permissions.
+            } catch (error: SecurityException) {
+                DiagnosticLogger.log(
+                    this,
+                    "VIDEO_URI_PERMISSION_NOT_PERSISTABLE",
+                    uriDescription(uri),
+                    error
+                )
             }
 
             getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
@@ -36,14 +47,55 @@ class MainActivity : AppCompatActivity() {
                 .putString(KEY_VIDEO_URI, uri.toString())
                 .apply()
 
+            DiagnosticLogger.log(this, "VIDEO_SELECTED", uriDescription(uri))
             showSelectedVideo(uri)
+        }
+
+    private val diagnosticsExporter =
+        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
+            if (uri == null) {
+                DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_CANCELLED")
+                return@registerForActivityResult
+            }
+
+            try {
+                contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    DiagnosticLogger.exportTo(this, outputStream)
+                } ?: error("Unable to open diagnostics destination")
+
+                Toast.makeText(
+                    this,
+                    "Diagnostics log exported",
+                    Toast.LENGTH_SHORT
+                ).show()
+            } catch (error: Exception) {
+                DiagnosticLogger.log(
+                    this,
+                    "DIAGNOSTICS_EXPORT_FAILED",
+                    uriDescription(uri),
+                    error
+                )
+
+                Toast.makeText(
+                    this,
+                    "Could not export diagnostics log",
+                    Toast.LENGTH_LONG
+                ).show()
+            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        DiagnosticLogger.initialize(this)
+        DiagnosticLogger.log(this, "ACTIVITY_CREATED")
+
         setContentView(R.layout.activity_main)
 
         val buttonSelectVideo: Button = findViewById(R.id.buttonSelectVideo)
+        val buttonExportDiagnostics: Button = findViewById(R.id.buttonExportDiagnostics)
+        buttonExportDiagnostics.visibility =
+            if (AppConfig.LOGGER_ENABLED) View.VISIBLE else View.GONE
         textSelectedVideo = findViewById(R.id.textSelectedVideo)
 
         val radioGroupScaleMode: RadioGroup = findViewById(R.id.radioGroupScaleMode)
@@ -52,6 +104,8 @@ class MainActivity : AppCompatActivity() {
         val buttonApplyWallpaper: Button = findViewById(R.id.buttonApplyWallpaper)
 
         buttonApplyWallpaper.setOnClickListener {
+            DiagnosticLogger.log(this, "OPEN_LIVE_WALLPAPER_PICKER")
+
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                 putExtra(
                     WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
@@ -73,7 +127,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         radioGroupScaleMode.setOnCheckedChangeListener { _, checkedId ->
-
             val scaleMode = when (checkedId) {
                 R.id.radioStretch -> SCALE_MODE_STRETCH
                 R.id.radioCrop -> SCALE_MODE_CROP
@@ -83,10 +136,23 @@ class MainActivity : AppCompatActivity() {
             preferences.edit()
                 .putString(KEY_SCALE_MODE, scaleMode)
                 .apply()
+
+            DiagnosticLogger.log(
+                this,
+                "SCALE_MODE_CHANGED",
+                "scaleMode=$scaleMode"
+            )
         }
 
         buttonSelectVideo.setOnClickListener {
             videoPicker.launch(arrayOf("video/*"))
+        }
+
+        if (AppConfig.LOGGER_ENABLED) {
+            buttonExportDiagnostics.setOnClickListener {
+                DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_REQUESTED")
+                diagnosticsExporter.launch(diagnosticsFileName())
+            }
         }
 
         loadSelectedVideo()
@@ -104,6 +170,19 @@ class MainActivity : AppCompatActivity() {
 
     private fun showSelectedVideo(uri: Uri) {
         textSelectedVideo.text = uri.toString()
+    }
+
+    private fun diagnosticsFileName(): String {
+        val timestamp = SimpleDateFormat(
+            "yyyyMMdd-HHmmss",
+            Locale.US
+        ).format(Date())
+
+        return "kinewall-diagnostics-$timestamp.txt"
+    }
+
+    private fun uriDescription(uri: Uri): String {
+        return "scheme=${uri.scheme ?: "unknown"}, authority=${uri.authority ?: "unknown"}"
     }
 
     companion object {

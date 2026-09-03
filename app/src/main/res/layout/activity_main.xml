@@ -47,4 +47,11 @@
             android:text="Apply wallpaper" />
 
     </RadioGroup>
+
+    <Button
+        android:id="@+id/buttonExportDiagnostics"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="24dp"
+        android:text="Export diagnostics log" />
 </LinearLayout>
