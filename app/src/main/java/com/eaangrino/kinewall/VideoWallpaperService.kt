@@ -1,19 +1,74 @@
 package com.eaangrino.kinewall
 
+import android.content.res.Configuration
+import android.hardware.display.DisplayManager
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.service.wallpaper.WallpaperService
+import android.view.Display
+import android.view.Surface
 import android.view.SurfaceHolder
 import kotlin.math.abs
 
 class VideoWallpaperService : WallpaperService() {
 
+    private var displayManager: DisplayManager? = null
+    private var lastDisplayRotation: Int? = null
+
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) = Unit
+
+        override fun onDisplayRemoved(displayId: Int) = Unit
+
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId != Display.DEFAULT_DISPLAY) {
+                return
+            }
+
+            val newRotation = defaultDisplayRotation()
+
+            if (newRotation == lastDisplayRotation) {
+                return
+            }
+
+            val previousRotation = lastDisplayRotation
+            lastDisplayRotation = newRotation
+
+            DiagnosticLogger.log(
+                this@VideoWallpaperService,
+                "DISPLAY_ROTATION_CHANGED",
+                "previous=${displayRotationName(previousRotation)}, " +
+                    "current=${displayRotationName(newRotation)}, " +
+                    configurationSnapshot()
+            )
+        }
+    }
+
     override fun onCreate() {
         super.onCreate()
         DiagnosticLogger.initialize(this)
-        DiagnosticLogger.log(this, "WALLPAPER_SERVICE_CREATED")
+
+        displayManager = getSystemService(DisplayManager::class.java)
+        lastDisplayRotation = defaultDisplayRotation()
+        displayManager?.registerDisplayListener(displayListener, null)
+
+        DiagnosticLogger.log(
+            this,
+            "WALLPAPER_SERVICE_CREATED",
+            configurationSnapshot()
+        )
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+
+        DiagnosticLogger.log(
+            this,
+            "CONFIGURATION_CHANGED",
+            configurationSnapshot(newConfig)
+        )
     }
 
     override fun onCreateEngine(): Engine {
@@ -22,8 +77,48 @@ class VideoWallpaperService : WallpaperService() {
     }
 
     override fun onDestroy() {
+        displayManager?.unregisterDisplayListener(displayListener)
+        displayManager = null
+
         DiagnosticLogger.log(this, "WALLPAPER_SERVICE_DESTROYED")
         super.onDestroy()
+    }
+
+    private fun defaultDisplayRotation(): Int? {
+        return displayManager
+            ?.getDisplay(Display.DEFAULT_DISPLAY)
+            ?.rotation
+    }
+
+    private fun configurationSnapshot(
+        configuration: Configuration = resources.configuration
+    ): String {
+        return "orientation=${orientationName(configuration.orientation)}, " +
+            "displayRotation=${displayRotationName(defaultDisplayRotation())}, " +
+            "screenWidthDp=${configuration.screenWidthDp}, " +
+            "screenHeightDp=${configuration.screenHeightDp}, " +
+            "smallestScreenWidthDp=${configuration.smallestScreenWidthDp}, " +
+            "densityDpi=${configuration.densityDpi}"
+    }
+
+    private fun orientationName(orientation: Int): String {
+        return when (orientation) {
+            Configuration.ORIENTATION_PORTRAIT -> "PORTRAIT"
+            Configuration.ORIENTATION_LANDSCAPE -> "LANDSCAPE"
+            Configuration.ORIENTATION_UNDEFINED -> "UNDEFINED"
+            else -> "UNKNOWN($orientation)"
+        }
+    }
+
+    private fun displayRotationName(rotation: Int?): String {
+        return when (rotation) {
+            Surface.ROTATION_0 -> "ROTATION_0(0deg)"
+            Surface.ROTATION_90 -> "ROTATION_90(90deg)"
+            Surface.ROTATION_180 -> "ROTATION_180(180deg)"
+            Surface.ROTATION_270 -> "ROTATION_270(270deg)"
+            null -> "UNKNOWN"
+            else -> "UNKNOWN($rotation)"
+        }
     }
 
     inner class VideoWallpaperEngine : Engine() {
@@ -87,7 +182,9 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "SURFACE_CHANGED",
                 "format=$format, width=$width, height=$height, " +
-                    "surfaceValid=${holder.surface.isValid}, visible=$isVisible"
+                    "surfaceValid=${holder.surface.isValid}, visible=$isVisible, " +
+                    configurationSnapshot() + ", " +
+                    playerSnapshot(mediaPlayer)
             )
         }
 
