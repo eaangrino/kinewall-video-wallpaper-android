@@ -16,7 +16,7 @@ MVP funcional. La versión actual permite seleccionar un video local, recordarlo
 ## Características
 
 - Implementación Android nativa en Kotlin.
-- Solo Android 14 o superior (`minSdk 34`).
+- Solo Android 11 o superior (`minSdk 30`).
 - Selección de videos locales mediante Storage Access Framework de Android.
 - Persistencia del acceso al URI del video seleccionado.
 - Reproducción directa con `MediaPlayer` sobre el `Surface` del `WallpaperService`.
@@ -66,13 +66,13 @@ La implementación actual no utiliza `Bitmap`, `Canvas`, WebView ni una capa gr�
 - Android Studio compatible con la versión actual del Android Gradle Plugin utilizada por el proyecto.
 - JDK 17.
 - Android SDK 37 instalado para compilar.
-- Dispositivo con Android 14 o superior (`API 34+`).
+- Dispositivo con Android 11 o superior (`API 30+`).
 
 Configuración Android actual:
 
 ```text
 compileSdk = 37
-minSdk     = 34
+minSdk     = 30
 targetSdk  = 36
 Java       = 17
 ```
@@ -104,7 +104,7 @@ El APK se generará en:
 app/build/outputs/apk/debug/
 ```
 
-También puedes abrir directamente el repositorio en Android Studio y ejecutar la configuración `app` en un dispositivo Android 14+.
+También puedes abrir directamente el repositorio en Android Studio y ejecutar la configuración `app` en un dispositivo Android 11+.
 
 ## Uso
 
@@ -172,7 +172,7 @@ Algunos launchers de fabricantes Android, incluyendo ciertas versiones de Xiaomi
 
 ## Limitaciones conocidas
 
-- Android 13 y anteriores no están soportados intencionalmente.
+- Android 10 y anteriores no están soportados intencionalmente.
 - La versión actual reproduce archivos de video locales.
 - El audio del wallpaper está silenciado intencionalmente.
 - La compatibilidad de codecs y contenedores depende finalmente de Android y del stack multimedia del dispositivo.
