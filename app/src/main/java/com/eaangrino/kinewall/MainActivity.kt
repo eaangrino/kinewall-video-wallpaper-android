@@ -109,6 +109,7 @@ class MainActivity : AppCompatActivity() {
 
         buttonApplyWallpaper.setOnClickListener {
             DiagnosticLogger.log(this, "OPEN_LIVE_WALLPAPER_PICKER")
+            resetCurrentKineWallWallpaper()
 
             val intent = Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
                 putExtra(
@@ -160,6 +161,26 @@ class MainActivity : AppCompatActivity() {
         }
 
         loadSelectedVideo()
+    }
+
+    private fun resetCurrentKineWallWallpaper() {
+        val wallpaperManager = WallpaperManager.getInstance(this)
+        val kineWallComponent = ComponentName(this, VideoWallpaperService::class.java)
+
+        try {
+            if (wallpaperManager.wallpaperInfo?.component != kineWallComponent) {
+                return
+            }
+
+            wallpaperManager.clear(WallpaperManager.FLAG_SYSTEM)
+            DiagnosticLogger.log(this, "LIVE_WALLPAPER_ASSIGNMENT_RESET")
+        } catch (error: Exception) {
+            DiagnosticLogger.log(
+                this,
+                "LIVE_WALLPAPER_ASSIGNMENT_RESET_FAILED",
+                throwable = error
+            )
+        }
     }
 
     private fun loadSelectedVideo() {
