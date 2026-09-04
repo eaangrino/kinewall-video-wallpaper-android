@@ -1,57 +1,206 @@
 <?xml version="1.0" encoding="utf-8"?>
-<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<androidx.core.widget.NestedScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:orientation="vertical"
-    android:gravity="center"
-    android:padding="24dp">
+    android:background="?attr/colorSurface"
+    android:clipToPadding="false"
+    android:fillViewport="true">
 
-    <Button
-        android:id="@+id/buttonSelectVideo"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:text="Select video" />
-
-    <TextView
-        android:id="@+id/textSelectedVideo"
+    <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:gravity="center"
-        android:text="No video selected"
-        android:textSize="16sp" />
+        android:orientation="vertical"
+        android:paddingStart="20dp"
+        android:paddingTop="28dp"
+        android:paddingEnd="20dp"
+        android:paddingBottom="32dp">
 
-    <RadioGroup
-        android:id="@+id/radioGroupScaleMode"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="32dp">
-
-        <RadioButton
-            android:id="@+id/radioStretch"
-            android:layout_width="wrap_content"
+        <TextView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Stretch" />
+            android:fontFamily="sans-serif-medium"
+            android:text="@string/screen_title"
+            android:textColor="?attr/colorOnSurface"
+            android:textSize="32sp" />
 
-        <RadioButton
-            android:id="@+id/radioCrop"
-            android:layout_width="wrap_content"
+        <TextView
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Fill and crop" />
+            android:layout_marginTop="6dp"
+            android:lineSpacingExtra="2dp"
+            android:text="@string/screen_subtitle"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="16sp" />
 
-        <Button
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="28dp"
+            app:cardBackgroundColor="?attr/colorSurfaceVariant"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp"
+            app:strokeColor="?attr/colorOutline"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/video_section_title"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="14sp" />
+
+                <TextView
+                    android:id="@+id/textSelectedVideo"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="10dp"
+                    android:ellipsize="end"
+                    android:fontFamily="sans-serif-medium"
+                    android:maxLines="2"
+                    android:text="@string/no_video_selected"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="20sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:lineSpacingExtra="2dp"
+                    android:text="@string/video_section_hint"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="14sp" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/buttonSelectVideo"
+                    style="@style/Widget.Material3.Button.OutlinedButton"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp"
+                    android:minHeight="52dp"
+                    android:text="@string/select_video"
+                    app:icon="@drawable/ic_video_library_24"
+                    app:iconGravity="textStart"
+                    app:iconPadding="10dp" />
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.card.MaterialCardView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            app:cardBackgroundColor="?attr/colorSurface"
+            app:cardCornerRadius="24dp"
+            app:cardElevation="0dp"
+            app:strokeColor="?attr/colorOutline"
+            app:strokeWidth="1dp">
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:padding="20dp">
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="sans-serif-medium"
+                    android:text="@string/display_section_title"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textSize="18sp" />
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp"
+                    android:text="@string/display_section_hint"
+                    android:textColor="?attr/colorOnSurfaceVariant"
+                    android:textSize="14sp" />
+
+                <RadioGroup
+                    android:id="@+id/radioGroupScaleMode"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp">
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/radioCrop"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:text="@string/scale_crop"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="48dp"
+                        android:layout_marginTop="-6dp"
+                        android:layout_marginBottom="8dp"
+                        android:text="@string/scale_crop_hint"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:textSize="13sp" />
+
+                    <com.google.android.material.radiobutton.MaterialRadioButton
+                        android:id="@+id/radioStretch"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:minHeight="48dp"
+                        android:text="@string/scale_stretch"
+                        android:textColor="?attr/colorOnSurface"
+                        android:textSize="16sp" />
+
+                    <TextView
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginStart="48dp"
+                        android:layout_marginTop="-6dp"
+                        android:text="@string/scale_stretch_hint"
+                        android:textColor="?attr/colorOnSurfaceVariant"
+                        android:textSize="13sp" />
+                </RadioGroup>
+            </LinearLayout>
+        </com.google.android.material.card.MaterialCardView>
+
+        <com.google.android.material.button.MaterialButton
             android:id="@+id/buttonApplyWallpaper"
-            android:layout_width="wrap_content"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:layout_marginTop="32dp"
-            android:text="Apply wallpaper" />
+            android:layout_marginTop="24dp"
+            android:enabled="false"
+            android:minHeight="56dp"
+            android:text="@string/apply_wallpaper"
+            app:icon="@drawable/ic_wallpaper_24"
+            app:iconGravity="textStart"
+            app:iconPadding="10dp" />
 
-    </RadioGroup>
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="10dp"
+            android:gravity="center"
+            android:text="@string/apply_wallpaper_hint"
+            android:textColor="?attr/colorOnSurfaceVariant"
+            android:textSize="13sp" />
 
-    <Button
-        android:id="@+id/buttonExportDiagnostics"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="24dp"
-        android:text="Export diagnostics log" />
-</LinearLayout>
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/buttonExportDiagnostics"
+            style="@style/Widget.Material3.Button.TextButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/export_diagnostics"
+            android:visibility="gone"
+            app:icon="@drawable/ic_bug_report_24"
+            app:iconGravity="textStart"
+            app:iconPadding="10dp" />
+    </LinearLayout>
+</androidx.core.widget.NestedScrollView>
