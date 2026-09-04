@@ -6,15 +6,18 @@
     <string name="video_section_title">Wallpaper video</string>
     <string name="no_video_selected">No video selected</string>
     <string name="selected_video_fallback">Selected video</string>
-    <string name="video_section_hint">Choose a video stored on your device. Kinewall keeps read access so it can play after a restart.</string>
+    <string name="video_section_hint">Choose a video stored on your device. Kinewall keeps read
+        access so it can play after a restart.</string>
     <string name="select_video">Choose video</string>
     <string name="display_section_title">Display mode</string>
     <string name="display_section_hint">Choose how the video fills the wallpaper surface.</string>
     <string name="scale_crop">Fill and crop</string>
-    <string name="scale_crop_hint">Fills the entire screen and crops overflowing edges.</string>
+    <string name="scale_crop_hint">Fills the entire screen and crops overflowing edges. Drag the
+        video in Android\'s wallpaper preview to choose the visible area.</string>
     <string name="scale_stretch">Stretch</string>
     <string name="scale_stretch_hint">Fits the video to the screen even if its aspect ratio changes.</string>
     <string name="apply_wallpaper">Apply wallpaper</string>
-    <string name="apply_wallpaper_hint">If Kinewall is already your live wallpaper, choosing a new video updates it automatically.</string>
+    <string name="apply_wallpaper_hint">If Kinewall is already your live wallpaper, choosing a new
+        video updates it automatically.</string>
     <string name="export_diagnostics">Export diagnostics log</string>
 </resources>

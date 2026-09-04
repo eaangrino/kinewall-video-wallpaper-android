@@ -10,9 +10,11 @@ import android.os.Looper
 import android.os.SystemClock
 import android.service.wallpaper.WallpaperService
 import android.view.Display
+import android.view.MotionEvent
 import android.view.Surface
 import android.view.SurfaceHolder
 import kotlin.math.abs
+import kotlin.math.max
 
 class VideoWallpaperService : WallpaperService() {
 
@@ -131,23 +133,40 @@ class VideoWallpaperService : WallpaperService() {
         private val preferences = getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
         private val preferenceChangeListener =
             SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
-                if (key == KEY_VIDEO_URI || key == KEY_SCALE_MODE) {
-                    mainHandler.post {
+                when (key) {
+                    KEY_VIDEO_URI -> mainHandler.post {
                         reloadConfiguredVideo(
                             reason = "preference_changed_$key",
-                            preservePosition = key == KEY_SCALE_MODE
+                            preservePosition = false
                         )
+                    }
+
+                    KEY_SCALE_MODE,
+                    KEY_CROP_POSITION_X,
+                    KEY_CROP_POSITION_Y -> mainHandler.post {
+                        updateRendererConfiguration()
                     }
                 }
             }
 
         private var mediaPlayer: MediaPlayer? = null
+        private var videoRenderer: VideoFrameRenderer? = null
+        private var playerInputSurface: Surface? = null
         private var isPrepared = false
         private var surfaceAvailable = false
         private var notPlayingWhileVisibleReported = false
         private var stallProbePending = false
         private var heartbeatScheduled = false
         private var lastRecoveryElapsedMs = 0L
+        private var outputWidth = 0
+        private var outputHeight = 0
+        private var videoWidth = 0
+        private var videoHeight = 0
+        private var cropPositionX = preferences.getFloat(KEY_CROP_POSITION_X, 0f)
+        private var cropPositionY = preferences.getFloat(KEY_CROP_POSITION_Y, 0f)
+        private var cropGestureActive = false
+        private var lastTouchX = 0f
+        private var lastTouchY = 0f
 
         private val heartbeatRunnable = Runnable {
             heartbeatScheduled = false
@@ -159,6 +178,11 @@ class VideoWallpaperService : WallpaperService() {
             preferences.registerOnSharedPreferenceChangeListener(preferenceChangeListener)
         }
 
+        override fun onCreate(surfaceHolder: SurfaceHolder) {
+            super.onCreate(surfaceHolder)
+            setTouchEventsEnabled(isPreview())
+        }
+
         override fun onSurfaceCreated(holder: SurfaceHolder) {
             super.onSurfaceCreated(holder)
 
@@ -166,7 +190,7 @@ class VideoWallpaperService : WallpaperService() {
             DiagnosticLogger.log(
                 this@VideoWallpaperService,
                 "SURFACE_CREATED",
-                "surfaceValid=${holder.surface.isValid}, visible=$isVisible"
+                "surfaceValid=${holder.surface.isValid}, visible=$isVisible, preview=${isPreview()}"
             )
 
             val videoUriString = getSharedPreferences(
@@ -183,8 +207,40 @@ class VideoWallpaperService : WallpaperService() {
                 return
             }
 
-            val videoUri = Uri.parse(videoUriString)
-            createAndPreparePlayer(holder, videoUri)
+            val renderer = VideoFrameRenderer { stage, error ->
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "VIDEO_RENDERER_ERROR",
+                    "stage=$stage",
+                    error
+                )
+            }
+            videoRenderer = renderer
+            updateRendererConfiguration()
+
+            renderer.attach(holder.surface) { inputSurface ->
+                mainHandler.post {
+                    if (!surfaceAvailable || videoRenderer !== renderer) {
+                        return@post
+                    }
+
+                    playerInputSurface = inputSurface
+                    val latestVideoUriString = preferences.getString(KEY_VIDEO_URI, null)
+                    if (latestVideoUriString == null) {
+                        DiagnosticLogger.log(
+                            this@VideoWallpaperService,
+                            "VIDEO_URI_MISSING",
+                            "No configured video URI when renderer became ready"
+                        )
+                        return@post
+                    }
+
+                    createAndPreparePlayer(
+                        inputSurface,
+                        Uri.parse(latestVideoUriString)
+                    )
+                }
+            }
         }
 
         override fun onSurfaceChanged(
@@ -194,6 +250,9 @@ class VideoWallpaperService : WallpaperService() {
             height: Int
         ) {
             super.onSurfaceChanged(holder, format, width, height)
+            outputWidth = width
+            outputHeight = height
+            videoRenderer?.setOutputSize(width, height)
 
             DiagnosticLogger.log(
                 this@VideoWallpaperService,
@@ -234,6 +293,66 @@ class VideoWallpaperService : WallpaperService() {
             }
         }
 
+        override fun onTouchEvent(event: MotionEvent) {
+            if (
+                !isPreview() ||
+                preferences.getString(KEY_SCALE_MODE, SCALE_MODE_CROP) != SCALE_MODE_CROP
+            ) {
+                cropGestureActive = false
+                return
+            }
+
+            val overflow = cropOverflow()
+            val canPanX = overflow.first > PAN_EPSILON_PX
+            val canPanY = overflow.second > PAN_EPSILON_PX
+
+            if (!canPanX && !canPanY) {
+                cropGestureActive = false
+                return
+            }
+
+            when (event.actionMasked) {
+                MotionEvent.ACTION_DOWN -> {
+                    cropGestureActive = true
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+                }
+
+                MotionEvent.ACTION_MOVE -> {
+                    if (!cropGestureActive) {
+                        return
+                    }
+
+                    val deltaX = event.x - lastTouchX
+                    val deltaY = event.y - lastTouchY
+                    lastTouchX = event.x
+                    lastTouchY = event.y
+
+                    if (canPanX) {
+                        cropPositionX = (
+                            cropPositionX - (2f * deltaX / overflow.first)
+                        ).coerceIn(-1f, 1f)
+                    }
+
+                    if (canPanY) {
+                        cropPositionY = (
+                            cropPositionY - (2f * deltaY / overflow.second)
+                        ).coerceIn(-1f, 1f)
+                    }
+
+                    videoRenderer?.setCropPosition(cropPositionX, cropPositionY)
+                }
+
+                MotionEvent.ACTION_UP,
+                MotionEvent.ACTION_CANCEL -> {
+                    if (cropGestureActive) {
+                        persistCropPosition()
+                    }
+                    cropGestureActive = false
+                }
+            }
+        }
+
         override fun onSurfaceDestroyed(holder: SurfaceHolder) {
             surfaceAvailable = false
 
@@ -244,6 +363,9 @@ class VideoWallpaperService : WallpaperService() {
             )
 
             releasePlayer("surface_destroyed")
+            playerInputSurface = null
+            videoRenderer?.release()
+            videoRenderer = null
             super.onSurfaceDestroyed(holder)
         }
 
@@ -258,6 +380,9 @@ class VideoWallpaperService : WallpaperService() {
             preferences.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener)
             mainHandler.removeCallbacksAndMessages(null)
             releasePlayer("engine_destroyed")
+            playerInputSurface = null
+            videoRenderer?.release()
+            videoRenderer = null
             super.onDestroy()
         }
 
@@ -274,12 +399,12 @@ class VideoWallpaperService : WallpaperService() {
                 return
             }
 
-            val holder = surfaceHolder
-            if (!holder.surface.isValid) {
+            val inputSurface = playerInputSurface
+            if (inputSurface == null || !inputSurface.isValid) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
                     "VIDEO_CONFIGURATION_RELOAD_SKIPPED",
-                    "reason=$reason, surfaceValid=false"
+                    "reason=$reason, inputSurfaceValid=${inputSurface?.isValid ?: false}"
                 )
                 return
             }
@@ -304,14 +429,14 @@ class VideoWallpaperService : WallpaperService() {
             )
 
             createAndPreparePlayer(
-                holder,
+                inputSurface,
                 Uri.parse(videoUriString),
                 resumePositionMs
             )
         }
 
         private fun createAndPreparePlayer(
-            holder: SurfaceHolder,
+            inputSurface: Surface,
             videoUri: Uri,
             resumePositionMs: Int? = null
         ) {
@@ -331,23 +456,11 @@ class VideoWallpaperService : WallpaperService() {
             )
 
             try {
-                player.setSurface(holder.surface)
+                player.setSurface(inputSurface)
                 player.setDataSource(this@VideoWallpaperService, videoUri)
 
-                val scaleMode = getSharedPreferences(
-                    PREFERENCES_NAME,
-                    MODE_PRIVATE
-                ).getString(KEY_SCALE_MODE, SCALE_MODE_CROP)
-
-                player.setVideoScalingMode(
-                    when (scaleMode) {
-                        SCALE_MODE_STRETCH ->
-                            MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT
-
-                        else ->
-                            MediaPlayer.VIDEO_SCALING_MODE_SCALE_TO_FIT_WITH_CROPPING
-                    }
-                )
+                val scaleMode = preferences.getString(KEY_SCALE_MODE, SCALE_MODE_CROP)
+                updateRendererConfiguration()
 
                 player.isLooping = true
                 player.setVolume(0f, 0f)
@@ -359,6 +472,12 @@ class VideoWallpaperService : WallpaperService() {
 
                     isPrepared = true
                     notPlayingWhileVisibleReported = false
+                    videoWidth = preparedPlayer.videoWidth
+                    videoHeight = preparedPlayer.videoHeight
+                    videoRenderer?.setVideoSize(
+                        videoWidth,
+                        videoHeight
+                    )
 
                     DiagnosticLogger.log(
                         this@VideoWallpaperService,
@@ -393,6 +512,9 @@ class VideoWallpaperService : WallpaperService() {
                 }
 
                 player.setOnVideoSizeChangedListener { _, width, height ->
+                    videoWidth = width
+                    videoHeight = height
+                    videoRenderer?.setVideoSize(width, height)
                     DiagnosticLogger.log(
                         this@VideoWallpaperService,
                         "VIDEO_SIZE_CHANGED",
@@ -447,7 +569,7 @@ class VideoWallpaperService : WallpaperService() {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
                     "PLAYER_SETUP_FAILED",
-                    "surfaceValid=${holder.surface.isValid}",
+                    "inputSurfaceValid=${inputSurface.isValid}",
                     error
                 )
                 releasePlayer("setup_failed")
@@ -687,12 +809,12 @@ class VideoWallpaperService : WallpaperService() {
                 return
             }
 
-            val holder = surfaceHolder
-            if (!holder.surface.isValid) {
+            val inputSurface = playerInputSurface
+            if (inputSurface == null || !inputSurface.isValid) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
                     "PLAYER_RECOVERY_SKIPPED",
-                    "reason=$reason, surfaceValid=false"
+                    "reason=$reason, inputSurfaceValid=${inputSurface?.isValid ?: false}"
                 )
                 return
             }
@@ -723,9 +845,58 @@ class VideoWallpaperService : WallpaperService() {
             )
 
             createAndPreparePlayer(
-                holder,
+                inputSurface,
                 Uri.parse(videoUriString),
                 resumePositionMs
+            )
+        }
+
+        private fun cropOverflow(): Pair<Float, Float> {
+            if (
+                outputWidth <= 0 ||
+                outputHeight <= 0 ||
+                videoWidth <= 0 ||
+                videoHeight <= 0
+            ) {
+                return 0f to 0f
+            }
+
+            val scale = max(
+                outputWidth.toFloat() / videoWidth.toFloat(),
+                outputHeight.toFloat() / videoHeight.toFloat()
+            )
+
+            return (
+                videoWidth * scale - outputWidth
+            ).coerceAtLeast(0f) to (
+                videoHeight * scale - outputHeight
+            ).coerceAtLeast(0f)
+        }
+
+        private fun persistCropPosition() {
+            preferences.edit()
+                .putFloat(KEY_CROP_POSITION_X, cropPositionX)
+                .putFloat(KEY_CROP_POSITION_Y, cropPositionY)
+                .apply()
+
+            DiagnosticLogger.log(
+                this@VideoWallpaperService,
+                "CROP_POSITION_CHANGED",
+                "source=wallpaper_preview, x=$cropPositionX, y=$cropPositionY"
+            )
+        }
+
+        private fun updateRendererConfiguration() {
+            cropPositionX = preferences.getFloat(KEY_CROP_POSITION_X, 0f)
+            cropPositionY = preferences.getFloat(KEY_CROP_POSITION_Y, 0f)
+
+            val renderer = videoRenderer ?: return
+            renderer.setScaleMode(
+                preferences.getString(KEY_SCALE_MODE, SCALE_MODE_CROP) ?: SCALE_MODE_CROP
+            )
+            renderer.setCropPosition(
+                cropPositionX,
+                cropPositionY
             )
         }
 
@@ -843,10 +1014,13 @@ class VideoWallpaperService : WallpaperService() {
         private const val PREFERENCES_NAME = "kinewall_preferences"
         private const val KEY_VIDEO_URI = "video_uri"
         private const val KEY_SCALE_MODE = "scale_mode"
+        private const val KEY_CROP_POSITION_X = "crop_position_x"
+        private const val KEY_CROP_POSITION_Y = "crop_position_y"
 
         private const val SCALE_MODE_STRETCH = "stretch"
         private const val SCALE_MODE_CROP = "crop"
 
+        private const val PAN_EPSILON_PX = 1f
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
         private const val STALL_PROBE_DELAY_MS = 3_000L
         private const val STALL_POSITION_TOLERANCE_MS = 250

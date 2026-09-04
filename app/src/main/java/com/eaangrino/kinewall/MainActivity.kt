@@ -47,6 +47,8 @@ class MainActivity : AppCompatActivity() {
             getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
                 .edit()
                 .putString(KEY_VIDEO_URI, uri.toString())
+                .putFloat(KEY_CROP_POSITION_X, 0f)
+                .putFloat(KEY_CROP_POSITION_Y, 0f)
                 .apply()
 
             DiagnosticLogger.log(this, "VIDEO_SELECTED", uriDescription(uri))
@@ -219,6 +221,8 @@ class MainActivity : AppCompatActivity() {
         private const val PREFERENCES_NAME = "kinewall_preferences"
         private const val KEY_VIDEO_URI = "video_uri"
         private const val KEY_SCALE_MODE = "scale_mode"
+        private const val KEY_CROP_POSITION_X = "crop_position_x"
+        private const val KEY_CROP_POSITION_Y = "crop_position_y"
 
         private const val SCALE_MODE_STRETCH = "stretch"
         private const val SCALE_MODE_CROP = "crop"
