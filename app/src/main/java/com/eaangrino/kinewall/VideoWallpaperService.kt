@@ -54,11 +54,9 @@ class VideoWallpaperService : WallpaperService() {
         super.onCreate()
         DiagnosticLogger.initialize(this)
 
-        if (AppConfig.LOGGER_ENABLED) {
-            displayManager = getSystemService(DisplayManager::class.java)
-            lastDisplayRotation = defaultDisplayRotation()
-            displayManager?.registerDisplayListener(displayListener, null)
-        }
+        displayManager = getSystemService(DisplayManager::class.java)
+        lastDisplayRotation = defaultDisplayRotation()
+        displayManager?.registerDisplayListener(displayListener, null)
 
         DiagnosticLogger.log(
             this,
@@ -153,11 +151,14 @@ class VideoWallpaperService : WallpaperService() {
         private var videoRenderer: VideoFrameRenderer? = null
         private var playerInputSurface: Surface? = null
         private var isPrepared = false
+        private var isPreparing = false
         private var surfaceAvailable = false
         private var notPlayingWhileVisibleReported = false
         private var stallProbePending = false
         private var heartbeatScheduled = false
+        private var recoveryScheduled = false
         private var lastRecoveryElapsedMs = 0L
+        private var rendererGeneration = 0L
         private var outputWidth = 0
         private var outputHeight = 0
         private var videoWidth = 0
@@ -207,40 +208,12 @@ class VideoWallpaperService : WallpaperService() {
                 return
             }
 
-            val renderer = VideoFrameRenderer { stage, error ->
-                DiagnosticLogger.log(
-                    this@VideoWallpaperService,
-                    "VIDEO_RENDERER_ERROR",
-                    "stage=$stage",
-                    error
-                )
-            }
-            videoRenderer = renderer
-            updateRendererConfiguration()
-
-            renderer.attach(holder.surface) { inputSurface ->
-                mainHandler.post {
-                    if (!surfaceAvailable || videoRenderer !== renderer) {
-                        return@post
-                    }
-
-                    playerInputSurface = inputSurface
-                    val latestVideoUriString = preferences.getString(KEY_VIDEO_URI, null)
-                    if (latestVideoUriString == null) {
-                        DiagnosticLogger.log(
-                            this@VideoWallpaperService,
-                            "VIDEO_URI_MISSING",
-                            "No configured video URI when renderer became ready"
-                        )
-                        return@post
-                    }
-
-                    createAndPreparePlayer(
-                        inputSurface,
-                        Uri.parse(latestVideoUriString)
-                    )
-                }
-            }
+            attachRendererAndPlayer(
+                outputSurface = holder.surface,
+                videoUri = Uri.parse(videoUriString),
+                resumePositionMs = null,
+                reason = "surface_created"
+            )
         }
 
         override fun onSurfaceChanged(
@@ -264,6 +237,17 @@ class VideoWallpaperService : WallpaperService() {
             )
         }
 
+        override fun onSurfaceRedrawNeeded(holder: SurfaceHolder) {
+            super.onSurfaceRedrawNeeded(holder)
+            videoRenderer?.requestRedraw()
+
+            DiagnosticLogger.log(
+                this@VideoWallpaperService,
+                "SURFACE_REDRAW_NEEDED",
+                "surfaceValid=${holder.surface.isValid}, visible=$isVisible"
+            )
+        }
+
         override fun onVisibilityChanged(visible: Boolean) {
             super.onVisibilityChanged(visible)
 
@@ -272,24 +256,57 @@ class VideoWallpaperService : WallpaperService() {
             DiagnosticLogger.log(
                 this@VideoWallpaperService,
                 "VISIBILITY_CHANGED",
-                "visible=$visible, prepared=$isPrepared, surfaceAvailable=$surfaceAvailable, " +
-                    playerSnapshot(player)
+                "visible=$visible, prepared=$isPrepared, preparing=$isPreparing, " +
+                    "surfaceAvailable=$surfaceAvailable, " + playerSnapshot(player)
             )
 
-            if (player == null || !isPrepared) {
+            if (!visible) {
+                if (player != null && isPrepared && safeIsPlaying(player) == true) {
+                    pausePlayer(player, "visibility_changed_hidden")
+                }
                 return
             }
 
-            if (visible) {
-                val isPlaying = safeIsPlaying(player)
+            videoRenderer?.requestRedraw()
 
-                if (isPlaying == false) {
-                    startPlayer(player, "visibility_changed_visible")
+            if (videoRenderer?.playbackSnapshot()?.failed == true) {
+                requestPipelineRecovery(
+                    reason = "visibility_visible_renderer_failed",
+                    resumePositionMs = currentResumePosition()
+                )
+                return
+            }
+
+            if (player == null) {
+                if (videoRenderer != null) {
+                    return
                 }
-            } else {
-                if (safeIsPlaying(player) == true) {
-                    pausePlayer(player, "visibility_changed_hidden")
-                }
+                requestPipelineRecovery(
+                    reason = "visibility_visible_without_player",
+                    resumePositionMs = null
+                )
+                return
+            }
+
+            if (isPreparing) {
+                return
+            }
+
+            if (!isPrepared) {
+                requestPipelineRecovery(
+                    reason = "visibility_visible_player_not_prepared",
+                    resumePositionMs = safeCurrentPosition(player)
+                )
+                return
+            }
+
+            when (safeIsPlaying(player)) {
+                true -> Unit
+                false -> startPlayer(player, "visibility_changed_visible")
+                null -> requestPipelineRecovery(
+                    reason = "visibility_visible_invalid_player_state",
+                    resumePositionMs = safeCurrentPosition(player)
+                )
             }
         }
 
@@ -363,9 +380,7 @@ class VideoWallpaperService : WallpaperService() {
             )
 
             releasePlayer("surface_destroyed")
-            playerInputSurface = null
-            videoRenderer?.release()
-            videoRenderer = null
+            releaseRenderer("surface_destroyed")
             super.onSurfaceDestroyed(holder)
         }
 
@@ -379,10 +394,9 @@ class VideoWallpaperService : WallpaperService() {
 
             preferences.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener)
             mainHandler.removeCallbacksAndMessages(null)
+            recoveryScheduled = false
             releasePlayer("engine_destroyed")
-            playerInputSurface = null
-            videoRenderer?.release()
-            videoRenderer = null
+            releaseRenderer("engine_destroyed")
             super.onDestroy()
         }
 
@@ -403,8 +417,12 @@ class VideoWallpaperService : WallpaperService() {
             if (inputSurface == null || !inputSurface.isValid) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
-                    "VIDEO_CONFIGURATION_RELOAD_SKIPPED",
+                    "VIDEO_CONFIGURATION_RELOAD_REQUIRES_PIPELINE_RECOVERY",
                     "reason=$reason, inputSurfaceValid=${inputSurface?.isValid ?: false}"
+                )
+                requestPipelineRecovery(
+                    reason = "configuration_reload_invalid_input_surface",
+                    resumePositionMs = if (preservePosition) currentResumePosition() else null
                 )
                 return
             }
@@ -445,6 +463,7 @@ class VideoWallpaperService : WallpaperService() {
             val player = MediaPlayer()
             mediaPlayer = player
             isPrepared = false
+            isPreparing = true
             notPlayingWhileVisibleReported = false
             stallProbePending = false
 
@@ -471,6 +490,7 @@ class VideoWallpaperService : WallpaperService() {
                     }
 
                     isPrepared = true
+                    isPreparing = false
                     notPlayingWhileVisibleReported = false
                     videoWidth = preparedPlayer.videoWidth
                     videoHeight = preparedPlayer.videoHeight
@@ -545,7 +565,9 @@ class VideoWallpaperService : WallpaperService() {
                         return@setOnErrorListener true
                     }
 
+                    val resumePositionMs = safeCurrentPosition(errorPlayer)
                     isPrepared = false
+                    isPreparing = false
                     stopHeartbeat()
 
                     DiagnosticLogger.log(
@@ -556,6 +578,10 @@ class VideoWallpaperService : WallpaperService() {
                             playerSnapshot(errorPlayer)
                     )
 
+                    requestPipelineRecovery(
+                        reason = "media_error_${what}_$extra",
+                        resumePositionMs = resumePositionMs
+                    )
                     true
                 }
 
@@ -566,6 +592,7 @@ class VideoWallpaperService : WallpaperService() {
                 )
                 player.prepareAsync()
             } catch (error: Exception) {
+                isPreparing = false
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
                     "PLAYER_SETUP_FAILED",
@@ -596,6 +623,10 @@ class VideoWallpaperService : WallpaperService() {
                     "PLAYER_START_FAILED",
                     "reason=$reason, ${playerSnapshot(player)}",
                     error
+                )
+                requestPipelineRecovery(
+                    reason = "player_start_failed_$reason",
+                    resumePositionMs = safeCurrentPosition(player)
                 )
             }
         }
@@ -635,6 +666,7 @@ class VideoWallpaperService : WallpaperService() {
 
             stopHeartbeat()
             isPrepared = false
+            isPreparing = false
             notPlayingWhileVisibleReported = false
             stallProbePending = false
             mediaPlayer = null
@@ -688,7 +720,7 @@ class VideoWallpaperService : WallpaperService() {
             DiagnosticLogger.log(
                 this@VideoWallpaperService,
                 "PLAYBACK_HEARTBEAT",
-                playerSnapshot(player)
+                playerSnapshot(player) + ", " + rendererSnapshot(videoRenderer)
             )
 
             if (isPlaying == false) {
@@ -700,10 +732,15 @@ class VideoWallpaperService : WallpaperService() {
                         playerSnapshot(player)
                     )
                 }
+                startPlayer(player, "heartbeat_not_playing")
                 return
             }
 
             if (isPlaying != true) {
+                requestPipelineRecovery(
+                    reason = "heartbeat_invalid_player_state",
+                    resumePositionMs = safeCurrentPosition(player)
+                )
                 return
             }
 
@@ -716,8 +753,16 @@ class VideoWallpaperService : WallpaperService() {
                 return
             }
 
+            val renderer = videoRenderer ?: run {
+                requestPipelineRecovery(
+                    reason = "stall_probe_renderer_missing",
+                    resumePositionMs = safeCurrentPosition(player)
+                )
+                return
+            }
             val firstPosition = safeCurrentPosition(player) ?: return
             val firstFramesPlayed = safeVideoFramesPlayed(player)
+            val firstRendererSnapshot = renderer.playbackSnapshot()
             val duration = safeDuration(player) ?: return
 
             if (duration <= STALL_PROBE_DELAY_MS * 2) {
@@ -732,6 +777,7 @@ class VideoWallpaperService : WallpaperService() {
 
                     if (
                         player !== mediaPlayer ||
+                        renderer !== videoRenderer ||
                         !isVisible ||
                         !surfaceAvailable ||
                         !isPrepared ||
@@ -742,6 +788,7 @@ class VideoWallpaperService : WallpaperService() {
 
                     val secondPosition = safeCurrentPosition(player) ?: return@postDelayed
                     val secondFramesPlayed = safeVideoFramesPlayed(player)
+                    val secondRendererSnapshot = renderer.playbackSnapshot()
                     val delta = abs(secondPosition - firstPosition)
 
                     if (delta <= STALL_POSITION_TOLERANCE_MS) {
@@ -756,7 +803,31 @@ class VideoWallpaperService : WallpaperService() {
                                 "secondFramesPlayed=$secondFramesPlayed, " +
                                 playerSnapshot(player)
                         )
-                        recoverPlayer(player, "playback_clock_stall")
+                        requestPipelineRecovery(
+                            reason = "playback_clock_stall",
+                            resumePositionMs = firstPosition
+                        )
+                        return@postDelayed
+                    }
+
+                    if (
+                        secondRendererSnapshot.framesPresented ==
+                            firstRendererSnapshot.framesPresented
+                    ) {
+                        DiagnosticLogger.log(
+                            this@VideoWallpaperService,
+                            "RENDERER_OUTPUT_STALL_SUSPECTED",
+                            "firstPositionMs=$firstPosition, " +
+                                "secondPositionMs=$secondPosition, " +
+                                "firstFramesPresented=${firstRendererSnapshot.framesPresented}, " +
+                                "secondFramesPresented=${secondRendererSnapshot.framesPresented}, " +
+                                "firstFramesAvailable=${firstRendererSnapshot.framesAvailable}, " +
+                                "secondFramesAvailable=${secondRendererSnapshot.framesAvailable}"
+                        )
+                        requestPipelineRecovery(
+                            reason = "renderer_frames_not_presenting",
+                            resumePositionMs = firstPosition
+                        )
                         return@postDelayed
                     }
 
@@ -775,80 +846,207 @@ class VideoWallpaperService : WallpaperService() {
                                 "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
                                 playerSnapshot(player)
                         )
-                        recoverPlayer(player, "video_frames_not_advancing")
+                        requestPipelineRecovery(
+                            reason = "video_frames_not_advancing",
+                            resumePositionMs = firstPosition
+                        )
                     }
                 },
                 STALL_PROBE_DELAY_MS
             )
         }
 
-        private fun recoverPlayer(
-            player: MediaPlayer,
-            reason: String
+        private fun requestPipelineRecovery(
+            reason: String,
+            resumePositionMs: Int?
         ) {
-            if (
-                player !== mediaPlayer ||
-                !isVisible ||
-                !surfaceAvailable ||
-                !isPrepared
-            ) {
+            if (!surfaceAvailable || !isVisible) {
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "PIPELINE_RECOVERY_DEFERRED",
+                    "reason=$reason, surfaceAvailable=$surfaceAvailable, visible=$isVisible"
+                )
+                return
+            }
+
+            if (recoveryScheduled) {
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "PIPELINE_RECOVERY_ALREADY_SCHEDULED",
+                    "reason=$reason"
+                )
                 return
             }
 
             val now = SystemClock.elapsedRealtime()
-            if (
-                lastRecoveryElapsedMs != 0L &&
-                now - lastRecoveryElapsedMs < RECOVERY_COOLDOWN_MS
+            val delayMs = if (
+                lastRecoveryElapsedMs == 0L ||
+                now - lastRecoveryElapsedMs >= RECOVERY_COOLDOWN_MS
             ) {
+                0L
+            } else {
+                RECOVERY_COOLDOWN_MS - (now - lastRecoveryElapsedMs)
+            }
+
+            recoveryScheduled = true
+            DiagnosticLogger.log(
+                this@VideoWallpaperService,
+                "PIPELINE_RECOVERY_SCHEDULED",
+                "reason=$reason, delayMs=$delayMs, resumePositionMs=$resumePositionMs"
+            )
+
+            mainHandler.postDelayed(
+                {
+                    recoveryScheduled = false
+                    performPipelineRecovery(reason, resumePositionMs)
+                },
+                delayMs
+            )
+        }
+
+        private fun performPipelineRecovery(
+            reason: String,
+            resumePositionMs: Int?
+        ) {
+            if (!surfaceAvailable || !isVisible) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
-                    "PLAYER_RECOVERY_SKIPPED",
-                    "reason=$reason, cooldownRemainingMs=" +
-                        (RECOVERY_COOLDOWN_MS - (now - lastRecoveryElapsedMs))
+                    "PIPELINE_RECOVERY_SKIPPED",
+                    "reason=$reason, surfaceAvailable=$surfaceAvailable, visible=$isVisible"
                 )
                 return
             }
 
-            val inputSurface = playerInputSurface
-            if (inputSurface == null || !inputSurface.isValid) {
+            val outputSurface = surfaceHolder.surface
+            if (!outputSurface.isValid) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
-                    "PLAYER_RECOVERY_SKIPPED",
-                    "reason=$reason, inputSurfaceValid=${inputSurface?.isValid ?: false}"
+                    "PIPELINE_RECOVERY_SKIPPED",
+                    "reason=$reason, outputSurfaceValid=false"
                 )
                 return
             }
 
-            val videoUriString = getSharedPreferences(
-                PREFERENCES_NAME,
-                MODE_PRIVATE
-            ).getString(KEY_VIDEO_URI, null)
-
+            val videoUriString = preferences.getString(KEY_VIDEO_URI, null)
             if (videoUriString == null) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
-                    "PLAYER_RECOVERY_SKIPPED",
+                    "PIPELINE_RECOVERY_SKIPPED",
                     "reason=$reason, videoUriMissing=true"
                 )
                 return
             }
 
-            val resumePositionMs = safeCurrentPosition(player)?.coerceAtLeast(0) ?: 0
-            lastRecoveryElapsedMs = now
-
+            lastRecoveryElapsedMs = SystemClock.elapsedRealtime()
             DiagnosticLogger.log(
                 this@VideoWallpaperService,
-                "PLAYER_RECOVERY_REQUESTED",
+                "PIPELINE_RECOVERY_REQUESTED",
                 "reason=$reason, resumePositionMs=$resumePositionMs, " +
-                    "framesPlayed=${safeVideoFramesPlayed(player)}, " +
-                    "framesDropped=${safeVideoFramesDropped(player)}"
+                    rendererSnapshot(videoRenderer)
             )
 
-            createAndPreparePlayer(
-                inputSurface,
-                Uri.parse(videoUriString),
-                resumePositionMs
+            releasePlayer("pipeline_recovery_$reason")
+            releaseRenderer("pipeline_recovery_$reason")
+            attachRendererAndPlayer(
+                outputSurface = outputSurface,
+                videoUri = Uri.parse(videoUriString),
+                resumePositionMs = resumePositionMs,
+                reason = "pipeline_recovery_$reason"
             )
+        }
+
+        private fun attachRendererAndPlayer(
+            outputSurface: Surface,
+            videoUri: Uri,
+            resumePositionMs: Int?,
+            reason: String
+        ) {
+            if (!surfaceAvailable || !outputSurface.isValid) {
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "RENDERER_ATTACH_SKIPPED",
+                    "reason=$reason, surfaceAvailable=$surfaceAvailable, " +
+                        "outputSurfaceValid=${outputSurface.isValid}"
+                )
+                return
+            }
+
+            rendererGeneration += 1
+            val generation = rendererGeneration
+            val renderer = VideoFrameRenderer { stage, error ->
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "VIDEO_RENDERER_ERROR",
+                    "stage=$stage, generation=$generation, reason=$reason",
+                    error
+                )
+
+                mainHandler.post {
+                    if (surfaceAvailable && generation == rendererGeneration) {
+                        requestPipelineRecovery(
+                            reason = "renderer_${stage}_failure",
+                            resumePositionMs = currentResumePosition()
+                        )
+                    }
+                }
+            }
+
+            videoRenderer = renderer
+            if (outputWidth > 0 && outputHeight > 0) {
+                renderer.setOutputSize(outputWidth, outputHeight)
+            }
+            updateRendererConfiguration()
+
+            renderer.attach(outputSurface) { inputSurface ->
+                mainHandler.post {
+                    if (
+                        !surfaceAvailable ||
+                        generation != rendererGeneration ||
+                        videoRenderer !== renderer
+                    ) {
+                        return@post
+                    }
+
+                    if (!inputSurface.isValid) {
+                        requestPipelineRecovery(
+                            reason = "renderer_input_surface_invalid",
+                            resumePositionMs = resumePositionMs
+                        )
+                        return@post
+                    }
+
+                    playerInputSurface = inputSurface
+                    createAndPreparePlayer(
+                        inputSurface = inputSurface,
+                        videoUri = videoUri,
+                        resumePositionMs = resumePositionMs
+                    )
+                }
+            }
+        }
+
+        private fun releaseRenderer(reason: String) {
+            rendererGeneration += 1
+            val renderer = videoRenderer
+            videoRenderer = null
+            playerInputSurface = null
+
+            if (renderer == null) {
+                return
+            }
+
+            val releasedCleanly = renderer.releaseAndWait()
+            DiagnosticLogger.log(
+                this@VideoWallpaperService,
+                "VIDEO_RENDERER_RELEASED",
+                "reason=$reason, completed=$releasedCleanly"
+            )
+        }
+
+        private fun currentResumePosition(): Int? {
+            return mediaPlayer
+                ?.let { player -> safeCurrentPosition(player) }
+                ?.coerceAtLeast(0)
         }
 
         private fun cropOverflow(): Pair<Float, Float> {
@@ -906,7 +1104,7 @@ class VideoWallpaperService : WallpaperService() {
             }
 
             if (!isPrepared) {
-                return "state=not_prepared"
+                return if (isPreparing) "state=preparing" else "state=not_prepared"
             }
 
             return "isPlaying=${safeIsPlaying(player)}, " +
@@ -916,6 +1114,27 @@ class VideoWallpaperService : WallpaperService() {
                 "videoHeight=${safeVideoHeight(player)}, " +
                 "framesPlayed=${safeVideoFramesPlayed(player)}, " +
                 "framesDropped=${safeVideoFramesDropped(player)}"
+        }
+
+        private fun rendererSnapshot(renderer: VideoFrameRenderer?): String {
+            if (renderer == null) {
+                return "renderer=null"
+            }
+
+            val snapshot = renderer.playbackSnapshot()
+            val now = SystemClock.elapsedRealtime()
+            val frameAvailableAgeMs = snapshot.lastFrameAvailableElapsedMs
+                .takeIf { it > 0L }
+                ?.let { now - it }
+            val framePresentedAgeMs = snapshot.lastFramePresentedElapsedMs
+                .takeIf { it > 0L }
+                ?.let { now - it }
+
+            return "rendererFailed=${snapshot.failed}, " +
+                "rendererFramesAvailable=${snapshot.framesAvailable}, " +
+                "rendererFramesPresented=${snapshot.framesPresented}, " +
+                "lastFrameAvailableAgeMs=$frameAvailableAgeMs, " +
+                "lastFramePresentedAgeMs=$framePresentedAgeMs"
         }
 
         private fun safeIsPlaying(player: MediaPlayer): Boolean? {
@@ -1024,6 +1243,6 @@ class VideoWallpaperService : WallpaperService() {
         private const val HEARTBEAT_INTERVAL_MS = 15_000L
         private const val STALL_PROBE_DELAY_MS = 3_000L
         private const val STALL_POSITION_TOLERANCE_MS = 250
-        private const val RECOVERY_COOLDOWN_MS = 30_000L
+        private const val RECOVERY_COOLDOWN_MS = 5_000L
     }
 }

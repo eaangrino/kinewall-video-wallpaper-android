@@ -8,7 +8,9 @@ import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
 import java.io.PrintWriter
+import java.io.RandomAccessFile
 import java.io.StringWriter
+import java.nio.charset.StandardCharsets
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -18,12 +20,28 @@ import java.util.concurrent.atomic.AtomicBoolean
 
 object DiagnosticLogger {
 
+    data class DiagnosticLogFile(
+        val name: String,
+        val sizeBytes: Long,
+        val lastModified: Long,
+        val isToday: Boolean
+    )
+
+    data class LogChunk(
+        val content: String,
+        val nextOffset: Long
+    )
+
     private const val TAG = "KineWallDiagnostics"
     private const val LOG_DIRECTORY = "diagnostics"
-    private const val LOG_FILE = "kinewall-diagnostics.log"
-    private const val BACKUP_LOG_FILE = "kinewall-diagnostics.log.1"
-    private const val MAX_LOG_BYTES = 2L * 1024L * 1024L
-    private const val EXPORT_TIMEOUT_SECONDS = 10L
+    private const val LOG_FILE_PREFIX = "kinewall-diagnostics-"
+    private const val LOG_FILE_SUFFIX = ".log"
+    private const val LOG_DATE_PATTERN = "yyyy-MM-dd"
+    private const val WAIT_TIMEOUT_SECONDS = 10L
+
+    private val logFileRegex = Regex(
+        "^${Regex.escape(LOG_FILE_PREFIX)}\\d{4}-\\d{2}-\\d{2}${Regex.escape(LOG_FILE_SUFFIX)}$"
+    )
 
     private val initialized = AtomicBoolean(false)
     private val executor by lazy {
@@ -35,7 +53,7 @@ object DiagnosticLogger {
     }
 
     fun initialize(context: Context) {
-        if (!AppConfig.LOGGER_ENABLED) {
+        if (!DiagnosticSettings.isLoggingEnabled(context)) {
             return
         }
 
@@ -57,7 +75,7 @@ object DiagnosticLogger {
         details: String? = null,
         throwable: Throwable? = null
     ) {
-        if (!AppConfig.LOGGER_ENABLED) {
+        if (!DiagnosticSettings.isLoggingEnabled(context)) {
             return
         }
 
@@ -69,14 +87,14 @@ object DiagnosticLogger {
 
         executor.execute {
             try {
-                val logDirectory = getLogDirectory(applicationContext)
-                rotateIfNeeded(logDirectory)
-
-                val logFile = File(logDirectory, LOG_FILE)
+                val now = Date()
+                val logDirectory = getLogDirectory(applicationContext, createIfMissing = true)
+                    ?: error("Unable to create diagnostics directory")
+                val logFile = File(logDirectory, logFileName(now))
                 val timestamp = SimpleDateFormat(
                     "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
                     Locale.US
-                ).format(Date())
+                ).format(now)
 
                 FileOutputStream(logFile, true).bufferedWriter().use { writer ->
                     writer.append(timestamp)
@@ -105,83 +123,139 @@ object DiagnosticLogger {
         }
     }
 
-    fun exportTo(context: Context, outputStream: OutputStream) {
-        if (!AppConfig.LOGGER_ENABLED) {
-            return
-        }
+    fun listLogs(context: Context): List<DiagnosticLogFile> {
+        awaitPendingWrites()
 
-        val applicationContext = context.applicationContext
+        val directory = getLogDirectory(
+            context.applicationContext,
+            createIfMissing = false
+        ) ?: return emptyList()
+        val todayName = logFileName(Date())
 
-        val exportTask = executor.submit {
-            val logDirectory = getLogDirectory(applicationContext)
-
-            outputStream.bufferedWriter().use { writer ->
-                writer.appendLine("KineWall diagnostics export")
-                writer.appendLine(
-                    "Device: ${Build.MANUFACTURER} ${Build.MODEL} " +
-                        "(Android SDK ${Build.VERSION.SDK_INT})"
-                )
-                writer.appendLine()
-
-                appendFileIfPresent(
-                    writer = writer,
-                    file = File(logDirectory, BACKUP_LOG_FILE),
-                    label = BACKUP_LOG_FILE
-                )
-                appendFileIfPresent(
-                    writer = writer,
-                    file = File(logDirectory, LOG_FILE),
-                    label = LOG_FILE
+        return directory.listFiles()
+            ?.asSequence()
+            ?.filter { file -> file.isFile && logFileRegex.matches(file.name) }
+            ?.sortedByDescending { file -> file.name }
+            ?.map { file ->
+                DiagnosticLogFile(
+                    name = file.name,
+                    sizeBytes = file.length(),
+                    lastModified = file.lastModified(),
+                    isToday = file.name == todayName
                 )
             }
-        }
-
-        exportTask.get(EXPORT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+            ?.toList()
+            .orEmpty()
     }
 
-    private fun appendFileIfPresent(
-        writer: java.io.BufferedWriter,
-        file: File,
-        label: String
+    fun readLogChunk(
+        context: Context,
+        fileName: String,
+        offset: Long
+    ): LogChunk {
+        awaitPendingWrites()
+        val file = requireLogFile(context.applicationContext, fileName)
+
+        RandomAccessFile(file, "r").use { randomAccessFile ->
+            val safeOffset = offset.coerceIn(0L, randomAccessFile.length())
+            randomAccessFile.seek(safeOffset)
+
+            val remainingBytes = randomAccessFile.length() - safeOffset
+            if (remainingBytes <= 0L) {
+                return LogChunk(content = "", nextOffset = safeOffset)
+            }
+
+            require(remainingBytes <= Int.MAX_VALUE) {
+                "Diagnostic log is too large to display"
+            }
+
+            val bytes = ByteArray(remainingBytes.toInt())
+            randomAccessFile.readFully(bytes)
+            return LogChunk(
+                content = String(bytes, StandardCharsets.UTF_8),
+                nextOffset = randomAccessFile.filePointer
+            )
+        }
+    }
+
+    fun copyLogTo(
+        context: Context,
+        fileName: String,
+        outputStream: OutputStream
     ) {
-        if (!file.exists()) {
-            return
-        }
+        awaitPendingWrites()
+        val file = requireLogFile(context.applicationContext, fileName)
 
-        writer.appendLine("===== $label =====")
-        file.bufferedReader().useLines { lines ->
-            lines.forEach { line ->
-                writer.appendLine(line)
-            }
-        }
-        writer.appendLine()
-    }
-
-    private fun getLogDirectory(context: Context): File {
-        return File(context.filesDir, LOG_DIRECTORY).apply {
-            if (!exists() && !mkdirs()) {
-                throw IllegalStateException("Unable to create diagnostics directory")
-            }
+        file.inputStream().use { inputStream ->
+            inputStream.copyTo(outputStream)
         }
     }
 
-    private fun rotateIfNeeded(logDirectory: File) {
-        val logFile = File(logDirectory, LOG_FILE)
+    fun getLogFileForSharing(context: Context, fileName: String): File {
+        awaitPendingWrites()
+        return requireLogFile(context.applicationContext, fileName)
+    }
 
-        if (!logFile.exists() || logFile.length() < MAX_LOG_BYTES) {
-            return
+    fun deleteLog(context: Context, fileName: String) {
+        val applicationContext = context.applicationContext
+        val deleteTask = executor.submit {
+            val file = requireLogFile(applicationContext, fileName)
+            check(file.delete()) {
+                "Unable to delete diagnostic log"
+            }
         }
 
-        val backupFile = File(logDirectory, BACKUP_LOG_FILE)
+        deleteTask.get(WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+    }
 
-        if (backupFile.exists() && !backupFile.delete()) {
-            Log.w(TAG, "Unable to delete old diagnostics backup")
+    fun isTodayLog(fileName: String): Boolean {
+        return fileName == logFileName(Date())
+    }
+
+    private fun awaitPendingWrites() {
+        try {
+            executor.submit { }.get(WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
+        } catch (error: Exception) {
+            Log.w(TAG, "Timed out waiting for diagnostic writes", error)
+        }
+    }
+
+    private fun getLogDirectory(
+        context: Context,
+        createIfMissing: Boolean
+    ): File? {
+        val directory = File(context.filesDir, LOG_DIRECTORY)
+
+        if (directory.exists()) {
+            return if (directory.isDirectory) directory else null
         }
 
-        if (!logFile.renameTo(backupFile)) {
-            logFile.copyTo(backupFile, overwrite = true)
-            logFile.writeText("")
+        if (!createIfMissing) {
+            return null
         }
+
+        return if (directory.mkdirs()) directory else null
+    }
+
+    private fun requireLogFile(context: Context, fileName: String): File {
+        require(logFileRegex.matches(fileName)) {
+            "Invalid diagnostic log file name"
+        }
+
+        val directory = getLogDirectory(context, createIfMissing = false)
+            ?: throw IllegalArgumentException("Diagnostic log directory does not exist")
+        val file = File(directory, fileName)
+
+        require(file.isFile) {
+            "Diagnostic log does not exist"
+        }
+
+        return file
+    }
+
+    private fun logFileName(date: Date): String {
+        val datePart = SimpleDateFormat(LOG_DATE_PATTERN, Locale.US).format(date)
+        return "$LOG_FILE_PREFIX$datePart$LOG_FILE_SUFFIX"
     }
 
     private fun sanitize(value: String): String {

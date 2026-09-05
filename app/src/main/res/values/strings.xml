@@ -19,5 +19,34 @@
     <string name="apply_wallpaper">Apply wallpaper</string>
     <string name="apply_wallpaper_hint">If Kinewall is already your live wallpaper, choosing a new
         video updates it automatically.</string>
+    <string name="open_navigation">Open navigation menu</string>
+    <string name="back_to_wallpaper">Back to video wallpaper</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_subtitle">Control diagnostics and app behavior.</string>
+    <string name="diagnostics_section_title">Diagnostics</string>
+    <string name="diagnostics_section_hint">Diagnostic logging is optional and disabled by default.</string>
+    <string name="diagnostic_logging_toggle">Collect diagnostic logs</string>
+    <string name="diagnostic_logging_hint">When enabled, Kinewall records app and wallpaper playback events in internal storage. Turning it off stops new log entries.</string>
     <string name="export_diagnostics">Export diagnostics log</string>
+    <string name="diagnostic_logs_title">Diagnostic logs</string>
+    <string name="diagnostic_logs_subtitle">One log is kept per day while diagnostic collection is enabled. Open today\'s log to watch new entries appear in real time.</string>
+    <string name="no_diagnostic_logs">No diagnostic logs are available yet.</string>
+    <string name="diagnostic_log_title">Diagnostic log</string>
+    <string name="diagnostic_log_actions">Log actions</string>
+    <string name="diagnostic_log_actions_for">Actions for %1$s</string>
+    <string name="diagnostic_log_today_metadata">Today · %1$s</string>
+    <string name="download">Download</string>
+    <string name="share">Share</string>
+    <string name="view">View</string>
+    <string name="delete">Delete</string>
+    <string name="delete_diagnostic_log_title">Delete diagnostic log?</string>
+    <string name="delete_diagnostic_log_message">Delete %1$s permanently? This action cannot be undone. If it is the current-day log and collection remains enabled, a new file can be created when another event is recorded.</string>
+    <string name="diagnostic_log_deleted">Diagnostic log deleted</string>
+    <string name="diagnostic_log_delete_failed">Could not delete diagnostic log</string>
+    <string name="share_diagnostic_log">Share diagnostic log</string>
+    <string name="diagnostic_log_downloaded">Diagnostic log downloaded</string>
+    <string name="diagnostic_log_download_failed">Could not download diagnostic log</string>
+    <string name="diagnostic_log_share_failed">Could not share diagnostic log</string>
+    <string name="diagnostic_log_read_failed">Could not read diagnostic log</string>
+    <string name="back_to_settings">Back to settings</string>
 </resources>

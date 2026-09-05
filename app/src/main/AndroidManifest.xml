@@ -2,6 +2,14 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:tools="http://schemas.android.com/tools">
 
+    <uses-permission android:name="android.permission.SET_WALLPAPER" />
+
+    <queries>
+        <intent>
+            <action android:name="android.service.wallpaper.WallpaperService" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -12,7 +20,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Kinewall">
         <activity
-            android:name=".MainActivity"
+            android:name=".ComposeDiagnosticsActivity"
+            android:exported="false" />
+
+        <activity
+            android:name=".ComposeMainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -34,6 +46,16 @@
                 android:name="android.service.wallpaper"
                 android:resource="@xml/video_wallpaper" />
         </service>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="${applicationId}.diagnostics.files"
+            android:exported="false"
+            android:grantUriPermissions="true">
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/diagnostic_file_paths" />
+        </provider>
     </application>
 
 </manifest>
