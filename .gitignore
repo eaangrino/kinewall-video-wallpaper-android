@@ -16,3 +16,4 @@ local.properties
 *.txt
 .kotlin
 .vscode
+.fake

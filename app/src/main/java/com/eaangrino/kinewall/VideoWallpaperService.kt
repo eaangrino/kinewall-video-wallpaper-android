@@ -54,11 +54,9 @@ class VideoWallpaperService : WallpaperService() {
         super.onCreate()
         DiagnosticLogger.initialize(this)
 
-        if (AppConfig.LOGGER_ENABLED) {
-            displayManager = getSystemService(DisplayManager::class.java)
-            lastDisplayRotation = defaultDisplayRotation()
-            displayManager?.registerDisplayListener(displayListener, null)
-        }
+        displayManager = getSystemService(DisplayManager::class.java)
+        lastDisplayRotation = defaultDisplayRotation()
+        displayManager?.registerDisplayListener(displayListener, null)
 
         DiagnosticLogger.log(
             this,

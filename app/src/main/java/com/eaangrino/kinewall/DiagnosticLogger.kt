@@ -35,7 +35,7 @@ object DiagnosticLogger {
     }
 
     fun initialize(context: Context) {
-        if (!AppConfig.LOGGER_ENABLED) {
+        if (!DiagnosticSettings.isLoggingEnabled(context)) {
             return
         }
 
@@ -57,7 +57,7 @@ object DiagnosticLogger {
         details: String? = null,
         throwable: Throwable? = null
     ) {
-        if (!AppConfig.LOGGER_ENABLED) {
+        if (!DiagnosticSettings.isLoggingEnabled(context)) {
             return
         }
 
@@ -106,10 +106,6 @@ object DiagnosticLogger {
     }
 
     fun exportTo(context: Context, outputStream: OutputStream) {
-        if (!AppConfig.LOGGER_ENABLED) {
-            return
-        }
-
         val applicationContext = context.applicationContext
 
         val exportTask = executor.submit {
@@ -120,6 +116,9 @@ object DiagnosticLogger {
                 writer.appendLine(
                     "Device: ${Build.MANUFACTURER} ${Build.MODEL} " +
                         "(Android SDK ${Build.VERSION.SDK_INT})"
+                )
+                writer.appendLine(
+                    "Collection enabled: ${DiagnosticSettings.isLoggingEnabled(applicationContext)}"
                 )
                 writer.appendLine()
 

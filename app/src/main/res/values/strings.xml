@@ -19,5 +19,13 @@
     <string name="apply_wallpaper">Apply wallpaper</string>
     <string name="apply_wallpaper_hint">If Kinewall is already your live wallpaper, choosing a new
         video updates it automatically.</string>
+    <string name="open_navigation">Open navigation menu</string>
+    <string name="back_to_wallpaper">Back to video wallpaper</string>
+    <string name="settings_title">Settings</string>
+    <string name="settings_subtitle">Control diagnostics and app behavior.</string>
+    <string name="diagnostics_section_title">Diagnostics</string>
+    <string name="diagnostics_section_hint">Diagnostic logging is optional and disabled by default.</string>
+    <string name="diagnostic_logging_toggle">Collect diagnostic logs</string>
+    <string name="diagnostic_logging_hint">When enabled, Kinewall records app and wallpaper playback events in internal storage. Turning it off stops new log entries.</string>
     <string name="export_diagnostics">Export diagnostics log</string>
 </resources>

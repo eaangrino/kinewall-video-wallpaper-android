@@ -12,14 +12,25 @@ import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
 import android.widget.Toast
+import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
+import androidx.core.view.GravityCompat
+import androidx.drawerlayout.widget.DrawerLayout
+import com.google.android.material.appbar.MaterialToolbar
+import com.google.android.material.materialswitch.MaterialSwitch
+import com.google.android.material.navigation.NavigationView
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
+    private lateinit var drawerLayout: DrawerLayout
+    private lateinit var navigationView: NavigationView
+    private lateinit var topAppBar: MaterialToolbar
+    private lateinit var homeContent: View
+    private lateinit var settingsContent: View
     private lateinit var textSelectedVideo: TextView
     private lateinit var buttonApplyWallpaper: Button
 
@@ -96,16 +107,24 @@ class MainActivity : AppCompatActivity() {
 
         setContentView(R.layout.activity_main)
 
+        drawerLayout = findViewById(R.id.drawerLayout)
+        navigationView = findViewById(R.id.navigationView)
+        topAppBar = findViewById(R.id.topAppBar)
+        homeContent = findViewById(R.id.homeContent)
+        settingsContent = findViewById(R.id.settingsContent)
+
         val buttonSelectVideo: Button = findViewById(R.id.buttonSelectVideo)
         val buttonExportDiagnostics: Button = findViewById(R.id.buttonExportDiagnostics)
-        buttonExportDiagnostics.visibility =
-            if (AppConfig.LOGGER_ENABLED) View.VISIBLE else View.GONE
+        val switchDiagnosticLogging: MaterialSwitch = findViewById(R.id.switchDiagnosticLogging)
         textSelectedVideo = findViewById(R.id.textSelectedVideo)
 
         val radioGroupScaleMode: RadioGroup = findViewById(R.id.radioGroupScaleMode)
         val radioStretch: RadioButton = findViewById(R.id.radioStretch)
         val radioCrop: RadioButton = findViewById(R.id.radioCrop)
         buttonApplyWallpaper = findViewById(R.id.buttonApplyWallpaper)
+
+        setupNavigation()
+        setupDiagnosticsSettings(switchDiagnosticLogging, buttonExportDiagnostics)
 
         buttonApplyWallpaper.setOnClickListener {
             DiagnosticLogger.log(this, "OPEN_LIVE_WALLPAPER_PICKER")
@@ -153,14 +172,93 @@ class MainActivity : AppCompatActivity() {
             videoPicker.launch(arrayOf("video/*"))
         }
 
-        if (AppConfig.LOGGER_ENABLED) {
-            buttonExportDiagnostics.setOnClickListener {
-                DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_REQUESTED")
-                diagnosticsExporter.launch(diagnosticsFileName())
+        loadSelectedVideo()
+        showHome()
+    }
+
+    private fun setupNavigation() {
+        topAppBar.setNavigationOnClickListener {
+            if (settingsContent.visibility == View.VISIBLE) {
+                showHome()
+            } else {
+                drawerLayout.openDrawer(GravityCompat.START)
             }
         }
 
-        loadSelectedVideo()
+        navigationView.setNavigationItemSelectedListener { item ->
+            when (item.itemId) {
+                R.id.navigationSettings -> {
+                    drawerLayout.closeDrawer(GravityCompat.START)
+                    showSettings()
+                    true
+                }
+
+                else -> false
+            }
+        }
+
+        onBackPressedDispatcher.addCallback(
+            this,
+            object : OnBackPressedCallback(true) {
+                override fun handleOnBackPressed() {
+                    when {
+                        drawerLayout.isDrawerOpen(GravityCompat.START) -> {
+                            drawerLayout.closeDrawer(GravityCompat.START)
+                        }
+
+                        settingsContent.visibility == View.VISIBLE -> {
+                            showHome()
+                        }
+
+                        else -> {
+                            isEnabled = false
+                            onBackPressedDispatcher.onBackPressed()
+                        }
+                    }
+                }
+            }
+        )
+    }
+
+    private fun setupDiagnosticsSettings(
+        switchDiagnosticLogging: MaterialSwitch,
+        buttonExportDiagnostics: Button
+    ) {
+        switchDiagnosticLogging.isChecked = DiagnosticSettings.isLoggingEnabled(this)
+
+        switchDiagnosticLogging.setOnCheckedChangeListener { _, enabled ->
+            if (enabled) {
+                DiagnosticSettings.setLoggingEnabled(this, true)
+                DiagnosticLogger.initialize(this)
+                DiagnosticLogger.log(this, "DIAGNOSTICS_ENABLED")
+            } else {
+                DiagnosticLogger.log(this, "DIAGNOSTICS_DISABLED")
+                DiagnosticSettings.setLoggingEnabled(this, false)
+            }
+        }
+
+        buttonExportDiagnostics.setOnClickListener {
+            DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_REQUESTED")
+            diagnosticsExporter.launch(diagnosticsFileName())
+        }
+    }
+
+    private fun showHome() {
+        homeContent.visibility = View.VISIBLE
+        settingsContent.visibility = View.GONE
+        navigationView.menu.findItem(R.id.navigationSettings).isChecked = false
+        topAppBar.setTitle(R.string.app_name)
+        topAppBar.setNavigationIcon(R.drawable.ic_menu_24)
+        topAppBar.setNavigationContentDescription(R.string.open_navigation)
+    }
+
+    private fun showSettings() {
+        homeContent.visibility = View.GONE
+        settingsContent.visibility = View.VISIBLE
+        navigationView.menu.findItem(R.id.navigationSettings).isChecked = true
+        topAppBar.setTitle(R.string.settings_title)
+        topAppBar.setNavigationIcon(R.drawable.ic_arrow_back_24)
+        topAppBar.setNavigationContentDescription(R.string.back_to_wallpaper)
     }
 
     private fun resetCurrentKineWallWallpaper() {
