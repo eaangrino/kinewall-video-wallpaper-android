@@ -20,11 +20,11 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.Kinewall">
         <activity
-            android:name=".DiagnosticsActivity"
+            android:name=".ComposeDiagnosticsActivity"
             android:exported="false" />
 
         <activity
-            android:name=".MainActivity"
+            android:name=".ComposeMainActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
