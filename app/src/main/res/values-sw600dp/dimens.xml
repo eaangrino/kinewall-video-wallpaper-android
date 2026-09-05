@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="screen_horizontal_padding">32dp</dimen>
+    <dimen name="screen_top_padding">28dp</dimen>
+    <dimen name="screen_bottom_padding">40dp</dimen>
+
+    <dimen name="home_content_max_width">960dp</dimen>
+    <dimen name="settings_content_max_width">760dp</dimen>
+    <dimen name="diagnostics_list_max_width">900dp</dimen>
+    <dimen name="diagnostics_viewer_max_width">1200dp</dimen>
+
+    <dimen name="log_viewer_horizontal_padding">24dp</dimen>
+    <dimen name="log_viewer_vertical_padding">20dp</dimen>
+
+    <dimen name="navigation_drawer_width">320dp</dimen>
+</resources>

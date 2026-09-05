@@ -29,14 +29,23 @@
             android:clipToPadding="false"
             android:fillViewport="true">
 
-            <LinearLayout
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:orientation="vertical"
-                android:paddingStart="20dp"
-                android:paddingTop="20dp"
-                android:paddingEnd="20dp"
-                android:paddingBottom="32dp">
+                android:layout_height="wrap_content">
+
+                <LinearLayout
+                    android:id="@+id/diagnosticsListInnerContent"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:paddingStart="@dimen/screen_horizontal_padding"
+                    android:paddingTop="@dimen/screen_top_padding"
+                    android:paddingEnd="@dimen/screen_horizontal_padding"
+                    android:paddingBottom="@dimen/screen_bottom_padding"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintWidth_max="@dimen/diagnostics_list_max_width">
 
                 <TextView
                     android:layout_width="match_parent"
@@ -73,7 +82,8 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="24dp"
                     android:orientation="vertical" />
-            </LinearLayout>
+                </LinearLayout>
+            </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.core.widget.NestedScrollView>
 
         <androidx.core.widget.NestedScrollView
@@ -84,19 +94,28 @@
             android:fillViewport="true"
             android:visibility="gone">
 
-            <TextView
-                android:id="@+id/logViewerText"
+            <androidx.constraintlayout.widget.ConstraintLayout
                 android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:fontFamily="monospace"
-                android:lineSpacingExtra="2dp"
-                android:paddingStart="16dp"
-                android:paddingTop="16dp"
-                android:paddingEnd="16dp"
-                android:paddingBottom="32dp"
-                android:textColor="?attr/colorOnSurface"
-                android:textIsSelectable="true"
-                android:textSize="12sp" />
+                android:layout_height="wrap_content">
+
+                <TextView
+                    android:id="@+id/logViewerText"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:fontFamily="monospace"
+                    android:lineSpacingExtra="2dp"
+                    android:paddingStart="@dimen/log_viewer_horizontal_padding"
+                    android:paddingTop="@dimen/log_viewer_vertical_padding"
+                    android:paddingEnd="@dimen/log_viewer_horizontal_padding"
+                    android:paddingBottom="@dimen/screen_bottom_padding"
+                    android:textColor="?attr/colorOnSurface"
+                    android:textIsSelectable="true"
+                    android:textSize="12sp"
+                    app:layout_constraintEnd_toEndOf="parent"
+                    app:layout_constraintStart_toStartOf="parent"
+                    app:layout_constraintTop_toTopOf="parent"
+                    app:layout_constraintWidth_max="@dimen/diagnostics_viewer_max_width" />
+            </androidx.constraintlayout.widget.ConstraintLayout>
         </androidx.core.widget.NestedScrollView>
     </FrameLayout>
 </LinearLayout>
