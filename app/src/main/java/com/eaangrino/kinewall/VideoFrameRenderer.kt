@@ -10,11 +10,15 @@ import android.opengl.GLES11Ext
 import android.opengl.GLES20
 import android.os.Handler
 import android.os.HandlerThread
+import android.os.SystemClock
 import android.view.Surface
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import java.nio.FloatBuffer
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
+import java.util.concurrent.atomic.AtomicLong
 
 internal class VideoFrameRenderer(
     private val onError: (stage: String, error: Throwable?) -> Unit
@@ -23,8 +27,15 @@ internal class VideoFrameRenderer(
     private val renderThread = HandlerThread("KinewallVideoRenderer").apply { start() }
     private val renderHandler = Handler(renderThread.looper)
     private val released = AtomicBoolean(false)
+    private val failed = AtomicBoolean(false)
+    private val releaseCompleted = CountDownLatch(1)
+    private val framesAvailable = AtomicLong(0L)
+    private val framesPresented = AtomicLong(0L)
+    private val lastFrameAvailableElapsedMs = AtomicLong(0L)
+    private val lastFramePresentedElapsedMs = AtomicLong(0L)
 
     private var eglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
+    private var eglDisplayAcquired = false
     private var eglContext: EGLContext = EGL14.EGL_NO_CONTEXT
     private var eglSurface: EGLSurface = EGL14.EGL_NO_SURFACE
     private var shaderProgram = 0
@@ -45,6 +56,7 @@ internal class VideoFrameRenderer(
     private var scaleMode = SCALE_MODE_CROP
     private var cropPositionX = 0f
     private var cropPositionY = 0f
+    private var hasTextureImage = false
 
     private val textureTransform = FloatArray(16)
     private val vertexBuffer = floatBufferOf(
@@ -67,10 +79,14 @@ internal class VideoFrameRenderer(
                 val readySurface = inputSurface ?: error("Video input surface was not created")
                 onReady(readySurface)
             } catch (error: Throwable) {
-                onError("initialize", error)
+                reportFailure("initialize", error)
                 released.set(true)
-                releaseGlResources()
-                renderThread.quitSafely()
+                try {
+                    releaseGlResources()
+                } finally {
+                    releaseCompleted.countDown()
+                    renderThread.quitSafely()
+                }
             }
         }
     }
@@ -105,14 +121,41 @@ internal class VideoFrameRenderer(
         }
     }
 
-    fun release() {
-        if (!released.compareAndSet(false, true)) {
-            return
+    fun requestRedraw() {
+        post {
+            if (!failed.get() && hasTextureImage) {
+                renderFrame(updateTexture = false)
+            }
+        }
+    }
+
+    fun playbackSnapshot(): PlaybackSnapshot {
+        return PlaybackSnapshot(
+            framesAvailable = framesAvailable.get(),
+            framesPresented = framesPresented.get(),
+            lastFrameAvailableElapsedMs = lastFrameAvailableElapsedMs.get(),
+            lastFramePresentedElapsedMs = lastFramePresentedElapsedMs.get(),
+            failed = failed.get()
+        )
+    }
+
+    fun releaseAndWait(timeoutMs: Long = RELEASE_TIMEOUT_MS): Boolean {
+        if (released.compareAndSet(false, true)) {
+            renderHandler.post {
+                try {
+                    releaseGlResources()
+                } finally {
+                    releaseCompleted.countDown()
+                    renderThread.quitSafely()
+                }
+            }
         }
 
-        renderHandler.post {
-            releaseGlResources()
-            renderThread.quitSafely()
+        return try {
+            releaseCompleted.await(timeoutMs, TimeUnit.MILLISECONDS)
+        } catch (_: InterruptedException) {
+            Thread.currentThread().interrupt()
+            false
         }
     }
 
@@ -128,15 +171,12 @@ internal class VideoFrameRenderer(
     }
 
     private fun initialize(outputSurface: Surface) {
-        eglDisplay = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
-        if (eglDisplay == EGL14.EGL_NO_DISPLAY) {
-            error("Unable to acquire EGL display")
+        if (!outputSurface.isValid) {
+            error("Wallpaper output surface is not valid")
         }
 
-        val versions = IntArray(2)
-        if (!EGL14.eglInitialize(eglDisplay, versions, 0, versions, 1)) {
-            error("Unable to initialize EGL")
-        }
+        eglDisplay = acquireEglDisplay()
+        eglDisplayAcquired = true
 
         val configAttributes = intArrayOf(
             EGL14.EGL_RED_SIZE, 8,
@@ -246,8 +286,10 @@ internal class VideoFrameRenderer(
         surfaceTexture = newSurfaceTexture
         newSurfaceTexture.setOnFrameAvailableListener(
             {
-                if (!released.get()) {
-                    renderFrame()
+                framesAvailable.incrementAndGet()
+                lastFrameAvailableElapsedMs.set(SystemClock.elapsedRealtime())
+                if (!released.get() && !failed.get()) {
+                    renderFrame(updateTexture = true)
                 }
             },
             renderHandler
@@ -255,15 +297,24 @@ internal class VideoFrameRenderer(
         inputSurface = Surface(newSurfaceTexture)
     }
 
-    private fun renderFrame() {
+    private fun renderFrame(updateTexture: Boolean) {
+        if (failed.get()) {
+            return
+        }
+
         val currentSurfaceTexture = surfaceTexture ?: return
         if (eglDisplay == EGL14.EGL_NO_DISPLAY || eglSurface == EGL14.EGL_NO_SURFACE) {
             return
         }
 
         try {
-            currentSurfaceTexture.updateTexImage()
-            currentSurfaceTexture.getTransformMatrix(textureTransform)
+            if (updateTexture) {
+                currentSurfaceTexture.updateTexImage()
+                currentSurfaceTexture.getTransformMatrix(textureTransform)
+                hasTextureImage = true
+            } else if (!hasTextureImage) {
+                return
+            }
 
             if (outputWidth <= 0 || outputHeight <= 0) {
                 return
@@ -313,10 +364,13 @@ internal class VideoFrameRenderer(
             if (!EGL14.eglSwapBuffers(eglDisplay, eglSurface)) {
                 error("eglSwapBuffers failed: 0x${EGL14.eglGetError().toString(16)}")
             }
-        } catch (error: Throwable) {
-            if (!released.get()) {
-                onError("render_frame", error)
+
+            if (updateTexture) {
+                framesPresented.incrementAndGet()
+                lastFramePresentedElapsedMs.set(SystemClock.elapsedRealtime())
             }
+        } catch (error: Throwable) {
+            reportFailure("render_frame", error)
         }
     }
 
@@ -406,6 +460,12 @@ internal class VideoFrameRenderer(
         }
     }
 
+    private fun reportFailure(stage: String, error: Throwable?) {
+        if (!released.get() && failed.compareAndSet(false, true)) {
+            onError(stage, error)
+        }
+    }
+
     private fun releaseGlResources() {
         inputSurface?.release()
         inputSurface = null
@@ -444,13 +504,28 @@ internal class VideoFrameRenderer(
             if (eglContext != EGL14.EGL_NO_CONTEXT) {
                 EGL14.eglDestroyContext(eglDisplay, eglContext)
             }
-            EGL14.eglTerminate(eglDisplay)
+            EGL14.eglReleaseThread()
         }
 
+        val displayToRelease = eglDisplay
         eglSurface = EGL14.EGL_NO_SURFACE
         eglContext = EGL14.EGL_NO_CONTEXT
         eglDisplay = EGL14.EGL_NO_DISPLAY
+        hasTextureImage = false
+
+        if (eglDisplayAcquired) {
+            eglDisplayAcquired = false
+            releaseEglDisplay(displayToRelease)
+        }
     }
+
+    data class PlaybackSnapshot(
+        val framesAvailable: Long,
+        val framesPresented: Long,
+        val lastFrameAvailableElapsedMs: Long,
+        val lastFramePresentedElapsedMs: Long,
+        val failed: Boolean
+    )
 
     private data class CropTransform(
         val scaleX: Float,
@@ -466,6 +541,48 @@ internal class VideoFrameRenderer(
     companion object {
         private const val SCALE_MODE_STRETCH = "stretch"
         private const val SCALE_MODE_CROP = "crop"
+        private const val RELEASE_TIMEOUT_MS = 2_000L
+
+        private val eglDisplayLock = Any()
+        private var sharedEglDisplay: EGLDisplay = EGL14.EGL_NO_DISPLAY
+        private var sharedEglDisplayRefCount = 0
+
+        private fun acquireEglDisplay(): EGLDisplay = synchronized(eglDisplayLock) {
+            if (sharedEglDisplay == EGL14.EGL_NO_DISPLAY) {
+                val display = EGL14.eglGetDisplay(EGL14.EGL_DEFAULT_DISPLAY)
+                if (display == EGL14.EGL_NO_DISPLAY) {
+                    error("Unable to acquire EGL display")
+                }
+
+                val versions = IntArray(2)
+                if (!EGL14.eglInitialize(display, versions, 0, versions, 1)) {
+                    error("Unable to initialize EGL")
+                }
+
+                sharedEglDisplay = display
+            }
+
+            sharedEglDisplayRefCount += 1
+            sharedEglDisplay
+        }
+
+        private fun releaseEglDisplay(display: EGLDisplay) {
+            synchronized(eglDisplayLock) {
+                if (
+                    display == EGL14.EGL_NO_DISPLAY ||
+                    display != sharedEglDisplay ||
+                    sharedEglDisplayRefCount <= 0
+                ) {
+                    return
+                }
+
+                sharedEglDisplayRefCount -= 1
+                if (sharedEglDisplayRefCount == 0) {
+                    EGL14.eglTerminate(sharedEglDisplay)
+                    sharedEglDisplay = EGL14.EGL_NO_DISPLAY
+                }
+            }
+        }
 
         private const val VERTEX_SHADER = """
             attribute vec4 aPosition;
