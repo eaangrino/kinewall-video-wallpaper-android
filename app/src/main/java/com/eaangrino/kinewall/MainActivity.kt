@@ -11,7 +11,6 @@ import android.widget.Button
 import android.widget.RadioButton
 import android.widget.RadioGroup
 import android.widget.TextView
-import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
@@ -20,9 +19,6 @@ import androidx.drawerlayout.widget.DrawerLayout
 import com.google.android.material.appbar.MaterialToolbar
 import com.google.android.material.materialswitch.MaterialSwitch
 import com.google.android.material.navigation.NavigationView
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
 
 class MainActivity : AppCompatActivity() {
 
@@ -64,39 +60,6 @@ class MainActivity : AppCompatActivity() {
 
             DiagnosticLogger.log(this, "VIDEO_SELECTED", uriDescription(uri))
             showSelectedVideo(uri)
-        }
-
-    private val diagnosticsExporter =
-        registerForActivityResult(ActivityResultContracts.CreateDocument("text/plain")) { uri: Uri? ->
-            if (uri == null) {
-                DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_CANCELLED")
-                return@registerForActivityResult
-            }
-
-            try {
-                contentResolver.openOutputStream(uri)?.use { outputStream ->
-                    DiagnosticLogger.exportTo(this, outputStream)
-                } ?: error("Unable to open diagnostics destination")
-
-                Toast.makeText(
-                    this,
-                    "Diagnostics log exported",
-                    Toast.LENGTH_SHORT
-                ).show()
-            } catch (error: Exception) {
-                DiagnosticLogger.log(
-                    this,
-                    "DIAGNOSTICS_EXPORT_FAILED",
-                    uriDescription(uri),
-                    error
-                )
-
-                Toast.makeText(
-                    this,
-                    "Could not export diagnostics log",
-                    Toast.LENGTH_LONG
-                ).show()
-            }
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -238,8 +201,8 @@ class MainActivity : AppCompatActivity() {
         }
 
         buttonExportDiagnostics.setOnClickListener {
-            DiagnosticLogger.log(this, "DIAGNOSTICS_EXPORT_REQUESTED")
-            diagnosticsExporter.launch(diagnosticsFileName())
+            DiagnosticLogger.log(this, "DIAGNOSTICS_LOGS_OPENED")
+            startActivity(Intent(this, DiagnosticsActivity::class.java))
         }
     }
 
@@ -321,15 +284,6 @@ class MainActivity : AppCompatActivity() {
         return displayName
             ?: uri.lastPathSegment
             ?: getString(R.string.selected_video_fallback)
-    }
-
-    private fun diagnosticsFileName(): String {
-        val timestamp = SimpleDateFormat(
-            "yyyyMMdd-HHmmss",
-            Locale.US
-        ).format(Date())
-
-        return "kinewall-diagnostics-$timestamp.txt"
     }
 
     private fun uriDescription(uri: Uri): String {
