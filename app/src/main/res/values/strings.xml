@@ -52,7 +52,11 @@
     <string name="back_to_settings">Back to settings</string>
     <string name="update_available_title">Update available</string>
     <string name="update_available_message">Kinewall %1$s is available. You are using %2$s.</string>
-    <string name="view_release">View release</string>
+    <string name="download_and_install">Download &amp; install</string>
+    <string name="update_downloading_title">Downloading update</string>
+    <string name="update_downloading_message">Downloading Kinewall %1$s…</string>
+    <string name="update_failed_title">Update failed</string>
+    <string name="update_failed_message">Kinewall could not download or open this update. Check your connection and try again.</string>
     <string name="later">Later</string>
     <string name="installed_version">Version: %1$s</string>
     <string name="github_release_version">Release GitHub: %1$s</string>

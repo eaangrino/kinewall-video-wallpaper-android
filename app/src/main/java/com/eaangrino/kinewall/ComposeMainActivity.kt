@@ -7,6 +7,8 @@ import android.content.Intent
 import android.net.Uri
 import android.os.Bundle
 import android.provider.OpenableColumns
+import android.provider.Settings
+import android.widget.ProgressBar
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -64,13 +66,16 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.core.content.FileProvider
 import com.eaangrino.kinewall.ui.KinewallTheme
+import java.io.File
 import kotlinx.coroutines.launch
 
 class ComposeMainActivity : ComponentActivity() {
 
     private var latestReleaseVersion by mutableStateOf<String?>(null)
     private var releaseCheckCompleted by mutableStateOf(false)
+    private var pendingUpdate: AvailableUpdate? = null
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -93,6 +98,16 @@ class ComposeMainActivity : ComponentActivity() {
 
         if (shouldCheckForUpdates(savedInstanceState)) {
             checkForUpdates()
+        }
+    }
+
+    override fun onResume() {
+        super.onResume()
+
+        val update = pendingUpdate ?: return
+        if (packageManager.canRequestPackageInstalls()) {
+            pendingUpdate = null
+            downloadAndInstallUpdate(update)
         }
     }
 
@@ -147,9 +162,123 @@ class ComposeMainActivity : ComponentActivity() {
                 )
             )
             .setNegativeButton(R.string.later, null)
-            .setPositiveButton(R.string.view_release) { _, _ ->
-                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl)))
+            .setPositiveButton(R.string.download_and_install) { _, _ ->
+                prepareUpdateInstallation(update)
             }
+            .show()
+    }
+
+    private fun prepareUpdateInstallation(update: AvailableUpdate) {
+        if (packageManager.canRequestPackageInstalls()) {
+            downloadAndInstallUpdate(update)
+            return
+        }
+
+        pendingUpdate = update
+        DiagnosticLogger.log(
+            this,
+            "UPDATE_INSTALL_PERMISSION_REQUIRED",
+            "version=${update.version}"
+        )
+
+        try {
+            startActivity(
+                Intent(
+                    Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                    Uri.parse("package:$packageName")
+                )
+            )
+        } catch (error: Exception) {
+            pendingUpdate = null
+            DiagnosticLogger.log(
+                this,
+                "UPDATE_INSTALL_PERMISSION_OPEN_FAILED",
+                throwable = error
+            )
+            showUpdateError()
+        }
+    }
+
+    private fun downloadAndInstallUpdate(update: AvailableUpdate) {
+        if (isFinishing || isDestroyed) return
+
+        DiagnosticLogger.log(
+            this,
+            "UPDATE_DOWNLOAD_STARTED",
+            "version=${update.version}"
+        )
+
+        val progressDialog = AlertDialog.Builder(this)
+            .setTitle(R.string.update_downloading_title)
+            .setMessage(getString(R.string.update_downloading_message, update.version))
+            .setView(ProgressBar(this))
+            .setCancelable(false)
+            .create()
+
+        progressDialog.show()
+
+        Thread(
+            {
+                val apkFile = try {
+                    UpdateInstaller.download(applicationContext, update)
+                } catch (error: Exception) {
+                    DiagnosticLogger.log(
+                        this,
+                        "UPDATE_DOWNLOAD_FAILED",
+                        "version=${update.version}",
+                        error
+                    )
+                    null
+                }
+
+                runOnUiThread {
+                    progressDialog.dismiss()
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+
+                    if (apkFile == null) {
+                        showUpdateError()
+                    } else {
+                        openPackageInstaller(apkFile, update.version)
+                    }
+                }
+            },
+            "kinewall-update-download"
+        ).start()
+    }
+
+    @Suppress("DEPRECATION")
+    private fun openPackageInstaller(apkFile: File, version: String) {
+        val apkUri = FileProvider.getUriForFile(
+            this,
+            "$packageName.diagnostics.files",
+            apkFile
+        )
+        val installIntent = Intent(Intent.ACTION_INSTALL_PACKAGE).apply {
+            data = apkUri
+            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+
+        try {
+            DiagnosticLogger.log(this, "UPDATE_INSTALLER_OPENED", "version=$version")
+            startActivity(installIntent)
+        } catch (error: Exception) {
+            DiagnosticLogger.log(
+                this,
+                "UPDATE_INSTALLER_OPEN_FAILED",
+                "version=$version",
+                error
+            )
+            showUpdateError()
+        }
+    }
+
+    private fun showUpdateError() {
+        if (isFinishing || isDestroyed) return
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.update_failed_title)
+            .setMessage(R.string.update_failed_message)
+            .setPositiveButton(android.R.string.ok, null)
             .show()
     }
 
