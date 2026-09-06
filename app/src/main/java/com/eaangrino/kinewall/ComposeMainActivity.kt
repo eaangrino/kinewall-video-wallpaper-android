@@ -13,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -45,7 +46,6 @@ import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
@@ -171,9 +171,6 @@ class ComposeMainActivity : ComponentActivity() {
                     ?: SCALE_MODE_CROP
             )
         }
-        var diagnosticLoggingEnabled by remember {
-            mutableStateOf(DiagnosticSettings.isLoggingEnabled(this))
-        }
         var destinationName by rememberSaveable {
             mutableStateOf(MainDestination.WALLPAPER.name)
         }
@@ -255,20 +252,8 @@ class ComposeMainActivity : ComponentActivity() {
 
                 MainDestination.SETTINGS -> SettingsScreen(
                     contentPadding = contentPadding,
-                    loggingEnabled = diagnosticLoggingEnabled,
                     releaseVersion = latestReleaseVersion,
                     releaseCheckCompleted = releaseCheckCompleted,
-                    onLoggingEnabledChange = { enabled ->
-                        diagnosticLoggingEnabled = enabled
-                        if (enabled) {
-                            DiagnosticSettings.setLoggingEnabled(this, true)
-                            DiagnosticLogger.initialize(this)
-                            DiagnosticLogger.log(this, "DIAGNOSTICS_ENABLED")
-                        } else {
-                            DiagnosticLogger.log(this, "DIAGNOSTICS_DISABLED")
-                            DiagnosticSettings.setLoggingEnabled(this, false)
-                        }
-                    },
                     onOpenDiagnostics = {
                         DiagnosticLogger.log(this, "DIAGNOSTICS_LOGS_OPENED")
                         startActivity(
@@ -611,10 +596,8 @@ class ComposeMainActivity : ComponentActivity() {
     @Composable
     private fun SettingsScreen(
         contentPadding: PaddingValues,
-        loggingEnabled: Boolean,
         releaseVersion: String?,
         releaseCheckCompleted: Boolean,
-        onLoggingEnabledChange: (Boolean) -> Unit,
         onOpenDiagnostics: () -> Unit
     ) {
         ResponsiveScreen(
@@ -634,55 +617,35 @@ class ComposeMainActivity : ComponentActivity() {
             )
             Spacer(Modifier.height(28.dp))
 
-            OutlinedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
-                    Text(
-                        text = stringResource(R.string.diagnostics_section_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                    Text(
-                        text = stringResource(R.string.diagnostics_section_hint),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp)
-                    )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp)
-                    ) {
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenDiagnostics)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.diagnostic_logging_toggle),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
+                            text = stringResource(R.string.diagnostics_section_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium
                         )
-                        Switch(
-                            checked = loggingEnabled,
-                            onCheckedChange = onLoggingEnabledChange
+                        Text(
+                            text = stringResource(R.string.diagnostics_section_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 6.dp)
                         )
                     }
-                    Text(
-                        text = stringResource(R.string.diagnostic_logging_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chevron_right_24),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                    OutlinedButton(
-                        onClick = onOpenDiagnostics,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 20.dp)
-                            .height(52.dp)
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.ic_bug_report_24),
-                            contentDescription = null
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(stringResource(R.string.export_diagnostics))
-                    }
                 }
             }
 
