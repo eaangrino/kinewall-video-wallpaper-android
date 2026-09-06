@@ -6,7 +6,12 @@ import java.net.URL
 
 internal data class AvailableUpdate(
     val version: String,
-    val releaseUrl: String
+    val apkUrl: String
+)
+
+internal data class ReleaseAsset(
+    val name: String,
+    val downloadUrl: String
 )
 
 internal data class ReleaseCheckResult(
@@ -43,15 +48,31 @@ internal object UpdateChecker {
     private fun parseLatestRelease(json: String, currentVersion: String): ReleaseCheckResult? {
         val release = JSONObject(json)
         val tag = release.optString("tag_name").trim()
-        val releaseUrl = release.optString("html_url").trim()
 
-        if (tag.isEmpty() || releaseUrl.isEmpty()) return null
+        if (tag.isEmpty()) return null
 
         val latestVersion = tag.removePrefix("v").removePrefix("V")
-        val availableUpdate = if (VersionComparator.isNewer(tag, currentVersion)) {
+        val assetsJson = release.optJSONArray("assets")
+        val assets = buildList {
+            if (assetsJson != null) {
+                for (index in 0 until assetsJson.length()) {
+                    val asset = assetsJson.optJSONObject(index) ?: continue
+                    val name = asset.optString("name").trim()
+                    val downloadUrl = asset.optString("browser_download_url").trim()
+
+                    if (name.isNotEmpty() && downloadUrl.isNotEmpty()) {
+                        add(ReleaseAsset(name = name, downloadUrl = downloadUrl))
+                    }
+                }
+            }
+        }
+        val apkUrl = selectProductionApk(assets)
+        val availableUpdate = if (
+            apkUrl != null && VersionComparator.isNewer(tag, currentVersion)
+        ) {
             AvailableUpdate(
                 version = latestVersion,
-                releaseUrl = releaseUrl
+                apkUrl = apkUrl
             )
         } else {
             null
@@ -61,5 +82,14 @@ internal object UpdateChecker {
             latestVersion = latestVersion,
             availableUpdate = availableUpdate
         )
+    }
+
+    internal fun selectProductionApk(assets: List<ReleaseAsset>): String? {
+        return assets.firstOrNull { asset ->
+            val normalizedName = asset.name.lowercase()
+            normalizedName.endsWith(".apk") &&
+                !normalizedName.contains("debug") &&
+                asset.downloadUrl.startsWith("https://")
+        }?.downloadUrl
     }
 }
