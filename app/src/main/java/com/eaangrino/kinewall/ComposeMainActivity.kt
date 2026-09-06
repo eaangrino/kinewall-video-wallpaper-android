@@ -1,5 +1,6 @@
 package com.eaangrino.kinewall
 
+import android.app.AlertDialog
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Intent
@@ -12,6 +13,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -44,7 +46,6 @@ import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDrawerState
@@ -68,6 +69,9 @@ import kotlinx.coroutines.launch
 
 class ComposeMainActivity : ComponentActivity() {
 
+    private var latestReleaseVersion by mutableStateOf<String?>(null)
+    private var releaseCheckCompleted by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -80,6 +84,73 @@ class ComposeMainActivity : ComponentActivity() {
                 MainApp()
             }
         }
+
+        latestReleaseVersion = savedInstanceState?.getString(STATE_LATEST_RELEASE_VERSION)
+        releaseCheckCompleted = savedInstanceState?.getBoolean(
+            STATE_RELEASE_CHECK_COMPLETED,
+            false
+        ) ?: false
+
+        if (shouldCheckForUpdates(savedInstanceState)) {
+            checkForUpdates()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_LATEST_RELEASE_VERSION, latestReleaseVersion)
+        outState.putBoolean(STATE_RELEASE_CHECK_COMPLETED, releaseCheckCompleted)
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun shouldCheckForUpdates(savedInstanceState: Bundle?): Boolean {
+        val launchedFromAppList = intent.action == Intent.ACTION_MAIN &&
+            intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+
+        return launchedFromAppList &&
+            (savedInstanceState == null || !releaseCheckCompleted)
+    }
+
+    private fun checkForUpdates() {
+        releaseCheckCompleted = false
+
+        Thread(
+            {
+                val result = try {
+                    UpdateChecker.check(BuildConfig.VERSION_NAME)
+                } catch (error: Exception) {
+                    DiagnosticLogger.log(this, "UPDATE_CHECK_FAILED", throwable = error)
+                    null
+                }
+
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+
+                    latestReleaseVersion = result?.latestVersion
+                    releaseCheckCompleted = true
+                    result?.availableUpdate?.let(::showUpdateDialog)
+                }
+            },
+            "kinewall-update-check"
+        ).start()
+    }
+
+    private fun showUpdateDialog(update: AvailableUpdate) {
+        if (isFinishing || isDestroyed) return
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.update_available_title)
+            .setMessage(
+                getString(
+                    R.string.update_available_message,
+                    update.version,
+                    BuildConfig.VERSION_NAME
+                )
+            )
+            .setNegativeButton(R.string.later, null)
+            .setPositiveButton(R.string.view_release) { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl)))
+            }
+            .show()
     }
 
     @Composable
@@ -99,9 +170,6 @@ class ComposeMainActivity : ComponentActivity() {
                 preferences.getString(KEY_SCALE_MODE, SCALE_MODE_CROP)
                     ?: SCALE_MODE_CROP
             )
-        }
-        var diagnosticLoggingEnabled by remember {
-            mutableStateOf(DiagnosticSettings.isLoggingEnabled(this))
         }
         var destinationName by rememberSaveable {
             mutableStateOf(MainDestination.WALLPAPER.name)
@@ -184,18 +252,8 @@ class ComposeMainActivity : ComponentActivity() {
 
                 MainDestination.SETTINGS -> SettingsScreen(
                     contentPadding = contentPadding,
-                    loggingEnabled = diagnosticLoggingEnabled,
-                    onLoggingEnabledChange = { enabled ->
-                        diagnosticLoggingEnabled = enabled
-                        if (enabled) {
-                            DiagnosticSettings.setLoggingEnabled(this, true)
-                            DiagnosticLogger.initialize(this)
-                            DiagnosticLogger.log(this, "DIAGNOSTICS_ENABLED")
-                        } else {
-                            DiagnosticLogger.log(this, "DIAGNOSTICS_DISABLED")
-                            DiagnosticSettings.setLoggingEnabled(this, false)
-                        }
-                    },
+                    releaseVersion = latestReleaseVersion,
+                    releaseCheckCompleted = releaseCheckCompleted,
                     onOpenDiagnostics = {
                         DiagnosticLogger.log(this, "DIAGNOSTICS_LOGS_OPENED")
                         startActivity(
@@ -538,8 +596,8 @@ class ComposeMainActivity : ComponentActivity() {
     @Composable
     private fun SettingsScreen(
         contentPadding: PaddingValues,
-        loggingEnabled: Boolean,
-        onLoggingEnabledChange: (Boolean) -> Unit,
+        releaseVersion: String?,
+        releaseCheckCompleted: Boolean,
         onOpenDiagnostics: () -> Unit
     ) {
         ResponsiveScreen(
@@ -559,55 +617,57 @@ class ComposeMainActivity : ComponentActivity() {
             )
             Spacer(Modifier.height(28.dp))
 
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenDiagnostics)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.diagnostics_section_title),
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                        Text(
+                            text = stringResource(R.string.diagnostics_section_hint),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 6.dp)
+                        )
+                    }
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chevron_right_24),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+
+            val releaseVersionText = if (!releaseCheckCompleted) {
+                stringResource(R.string.release_checking)
+            } else {
+                releaseVersion ?: stringResource(R.string.release_unavailable)
+            }
+
+            Spacer(Modifier.height(16.dp))
             OutlinedCard(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(20.dp)) {
                     Text(
-                        text = stringResource(R.string.diagnostics_section_title),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Medium
+                        text = stringResource(R.string.installed_version, BuildConfig.VERSION_NAME),
+                        style = MaterialTheme.typography.bodyLarge
                     )
                     Text(
-                        text = stringResource(R.string.diagnostics_section_hint),
-                        style = MaterialTheme.typography.bodyMedium,
+                        text = stringResource(R.string.github_release_version, releaseVersionText),
+                        style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 6.dp)
+                        modifier = Modifier.padding(top = 8.dp)
                     )
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 16.dp)
-                    ) {
-                        Text(
-                            text = stringResource(R.string.diagnostic_logging_toggle),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier.weight(1f)
-                        )
-                        Switch(
-                            checked = loggingEnabled,
-                            onCheckedChange = onLoggingEnabledChange
-                        )
-                    }
-                    Text(
-                        text = stringResource(R.string.diagnostic_logging_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 4.dp)
-                    )
-                    OutlinedButton(
-                        onClick = onOpenDiagnostics,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 20.dp)
-                            .height(52.dp)
-                    ) {
-                        Icon(
-                            painterResource(R.drawable.ic_bug_report_24),
-                            contentDescription = null
-                        )
-                        Spacer(Modifier.width(10.dp))
-                        Text(stringResource(R.string.export_diagnostics))
-                    }
                 }
             }
         }
@@ -719,6 +779,8 @@ class ComposeMainActivity : ComponentActivity() {
         private const val KEY_SCALE_MODE = "scale_mode"
         private const val KEY_CROP_POSITION_X = "crop_position_x"
         private const val KEY_CROP_POSITION_Y = "crop_position_y"
+        private const val STATE_LATEST_RELEASE_VERSION = "latest_release_version"
+        private const val STATE_RELEASE_CHECK_COMPLETED = "release_check_completed"
 
         private const val SCALE_MODE_STRETCH = "stretch"
         private const val SCALE_MODE_CROP = "crop"

@@ -35,6 +35,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -128,6 +129,9 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
     @Composable
     private fun DiagnosticsApp() {
         var selectedLogName by rememberSaveable { mutableStateOf<String?>(null) }
+        var loggingEnabled by remember {
+            mutableStateOf(DiagnosticSettings.isLoggingEnabled(this))
+        }
         var logs by remember { mutableStateOf(loadLogs()) }
         var logContent by remember { mutableStateOf("") }
         var deleteCandidate by remember { mutableStateOf<String?>(null) }
@@ -244,7 +248,20 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
             if (selectedLogName == null) {
                 LogList(
                     logs = logs,
+                    loggingEnabled = loggingEnabled,
                     contentPaddingTop = contentPadding.calculateTopPadding(),
+                    onLoggingEnabledChange = { enabled ->
+                        loggingEnabled = enabled
+                        if (enabled) {
+                            DiagnosticSettings.setLoggingEnabled(this, true)
+                            DiagnosticLogger.initialize(this)
+                            DiagnosticLogger.log(this, "DIAGNOSTICS_ENABLED")
+                        } else {
+                            DiagnosticLogger.log(this, "DIAGNOSTICS_DISABLED")
+                            DiagnosticSettings.setLoggingEnabled(this, false)
+                        }
+                        logs = loadLogs()
+                    },
                     onView = { selectedLogName = it },
                     onDownload = ::downloadLog,
                     onShare = ::shareLog,
@@ -298,7 +315,9 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
     @Composable
     private fun LogList(
         logs: List<DiagnosticLogger.DiagnosticLogFile>,
+        loggingEnabled: Boolean,
         contentPaddingTop: androidx.compose.ui.unit.Dp,
+        onLoggingEnabledChange: (Boolean) -> Unit,
         onView: (String) -> Unit,
         onDownload: (String) -> Unit,
         onShare: (String) -> Unit,
@@ -340,6 +359,33 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(bottom = 12.dp)
                         )
+                    }
+                    item {
+                        OutlinedCard(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
+                                Row(
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    modifier = Modifier.fillMaxWidth()
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.diagnostic_logging_toggle),
+                                        style = MaterialTheme.typography.bodyLarge,
+                                        fontWeight = FontWeight.Medium,
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                    Switch(
+                                        checked = loggingEnabled,
+                                        onCheckedChange = onLoggingEnabledChange
+                                    )
+                                }
+                                Text(
+                                    text = stringResource(R.string.diagnostic_logging_hint),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    modifier = Modifier.padding(top = 6.dp)
+                                )
+                            }
+                        }
                     }
 
                     if (logs.isEmpty()) {
@@ -393,6 +439,11 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                     .fillMaxWidth()
                     .padding(start = 16.dp, top = 10.dp, end = 8.dp, bottom = 10.dp)
             ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_bug_report_24),
+                    contentDescription = null,
+                    modifier = Modifier.padding(end = 12.dp)
+                )
                 Column(Modifier.weight(1f)) {
                     Text(
                         text = log.name,
@@ -653,7 +704,11 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         return if (log.isToday) {
             getString(R.string.diagnostic_log_today_metadata, size)
         } else {
-            size
+            getString(
+                R.string.diagnostic_log_historical_metadata,
+                diagnosticLogDateLabel(log.name),
+                size
+            )
         }
     }
 
