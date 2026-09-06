@@ -704,7 +704,11 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         return if (log.isToday) {
             getString(R.string.diagnostic_log_today_metadata, size)
         } else {
-            size
+            getString(
+                R.string.diagnostic_log_historical_metadata,
+                diagnosticLogDateLabel(log.name),
+                size
+            )
         }
     }
 

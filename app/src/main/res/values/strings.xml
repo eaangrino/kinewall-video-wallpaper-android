@@ -35,6 +35,7 @@
     <string name="diagnostic_log_actions">Log actions</string>
     <string name="diagnostic_log_actions_for">Actions for %1$s</string>
     <string name="diagnostic_log_today_metadata">Today · %1$s</string>
+    <string name="diagnostic_log_historical_metadata">%1$s · %2$s</string>
     <string name="download">Download</string>
     <string name="share">Share</string>
     <string name="view">View</string>
