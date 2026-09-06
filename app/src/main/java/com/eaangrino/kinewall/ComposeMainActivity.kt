@@ -1,5 +1,6 @@
 package com.eaangrino.kinewall
 
+import android.app.AlertDialog
 import android.app.WallpaperManager
 import android.content.ComponentName
 import android.content.Intent
@@ -68,6 +69,9 @@ import kotlinx.coroutines.launch
 
 class ComposeMainActivity : ComponentActivity() {
 
+    private var latestReleaseVersion by mutableStateOf<String?>(null)
+    private var releaseCheckCompleted by mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
 
@@ -80,6 +84,73 @@ class ComposeMainActivity : ComponentActivity() {
                 MainApp()
             }
         }
+
+        latestReleaseVersion = savedInstanceState?.getString(STATE_LATEST_RELEASE_VERSION)
+        releaseCheckCompleted = savedInstanceState?.getBoolean(
+            STATE_RELEASE_CHECK_COMPLETED,
+            false
+        ) ?: false
+
+        if (shouldCheckForUpdates(savedInstanceState)) {
+            checkForUpdates()
+        }
+    }
+
+    override fun onSaveInstanceState(outState: Bundle) {
+        outState.putString(STATE_LATEST_RELEASE_VERSION, latestReleaseVersion)
+        outState.putBoolean(STATE_RELEASE_CHECK_COMPLETED, releaseCheckCompleted)
+        super.onSaveInstanceState(outState)
+    }
+
+    private fun shouldCheckForUpdates(savedInstanceState: Bundle?): Boolean {
+        val launchedFromAppList = intent.action == Intent.ACTION_MAIN &&
+            intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+
+        return launchedFromAppList &&
+            (savedInstanceState == null || !releaseCheckCompleted)
+    }
+
+    private fun checkForUpdates() {
+        releaseCheckCompleted = false
+
+        Thread(
+            {
+                val result = try {
+                    UpdateChecker.check(BuildConfig.VERSION_NAME)
+                } catch (error: Exception) {
+                    DiagnosticLogger.log(this, "UPDATE_CHECK_FAILED", throwable = error)
+                    null
+                }
+
+                runOnUiThread {
+                    if (isFinishing || isDestroyed) return@runOnUiThread
+
+                    latestReleaseVersion = result?.latestVersion
+                    releaseCheckCompleted = true
+                    result?.availableUpdate?.let(::showUpdateDialog)
+                }
+            },
+            "kinewall-update-check"
+        ).start()
+    }
+
+    private fun showUpdateDialog(update: AvailableUpdate) {
+        if (isFinishing || isDestroyed) return
+
+        AlertDialog.Builder(this)
+            .setTitle(R.string.update_available_title)
+            .setMessage(
+                getString(
+                    R.string.update_available_message,
+                    update.version,
+                    BuildConfig.VERSION_NAME
+                )
+            )
+            .setNegativeButton(R.string.later, null)
+            .setPositiveButton(R.string.view_release) { _, _ ->
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(update.releaseUrl)))
+            }
+            .show()
     }
 
     @Composable
@@ -185,6 +256,8 @@ class ComposeMainActivity : ComponentActivity() {
                 MainDestination.SETTINGS -> SettingsScreen(
                     contentPadding = contentPadding,
                     loggingEnabled = diagnosticLoggingEnabled,
+                    releaseVersion = latestReleaseVersion,
+                    releaseCheckCompleted = releaseCheckCompleted,
                     onLoggingEnabledChange = { enabled ->
                         diagnosticLoggingEnabled = enabled
                         if (enabled) {
@@ -539,6 +612,8 @@ class ComposeMainActivity : ComponentActivity() {
     private fun SettingsScreen(
         contentPadding: PaddingValues,
         loggingEnabled: Boolean,
+        releaseVersion: String?,
+        releaseCheckCompleted: Boolean,
         onLoggingEnabledChange: (Boolean) -> Unit,
         onOpenDiagnostics: () -> Unit
     ) {
@@ -608,6 +683,28 @@ class ComposeMainActivity : ComponentActivity() {
                         Spacer(Modifier.width(10.dp))
                         Text(stringResource(R.string.export_diagnostics))
                     }
+                }
+            }
+
+            val releaseVersionText = if (!releaseCheckCompleted) {
+                stringResource(R.string.release_checking)
+            } else {
+                releaseVersion ?: stringResource(R.string.release_unavailable)
+            }
+
+            Spacer(Modifier.height(16.dp))
+            OutlinedCard(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(20.dp)) {
+                    Text(
+                        text = stringResource(R.string.installed_version, BuildConfig.VERSION_NAME),
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                    Text(
+                        text = stringResource(R.string.github_release_version, releaseVersionText),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp)
+                    )
                 }
             }
         }
@@ -719,6 +816,8 @@ class ComposeMainActivity : ComponentActivity() {
         private const val KEY_SCALE_MODE = "scale_mode"
         private const val KEY_CROP_POSITION_X = "crop_position_x"
         private const val KEY_CROP_POSITION_Y = "crop_position_y"
+        private const val STATE_LATEST_RELEASE_VERSION = "latest_release_version"
+        private const val STATE_RELEASE_CHECK_COMPLETED = "release_check_completed"
 
         private const val SCALE_MODE_STRETCH = "stretch"
         private const val SCALE_MODE_CROP = "crop"
