@@ -3,6 +3,7 @@ package com.eaangrino.kinewall
 import android.content.SharedPreferences
 import android.content.res.Configuration
 import android.hardware.display.DisplayManager
+import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.net.Uri
 import android.os.Handler
@@ -476,6 +477,12 @@ class VideoWallpaperService : WallpaperService() {
 
             try {
                 player.setSurface(inputSurface)
+                player.setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_MEDIA)
+                        .setAllowedCapturePolicy(AudioAttributes.ALLOW_CAPTURE_BY_NONE)
+                        .build()
+                )
                 player.setDataSource(this@VideoWallpaperService, videoUri)
 
                 val scaleMode = preferences.getString(KEY_SCALE_MODE, SCALE_MODE_CROP)
