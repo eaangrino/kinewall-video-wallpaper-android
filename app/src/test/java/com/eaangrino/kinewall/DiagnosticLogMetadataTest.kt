@@ -22,7 +22,7 @@ class DiagnosticLogMetadataTest {
             Model: 23129RAA4G
             Device: sapphire
             Android SDK: 36
-            App version: 0.5.0
+            App version: 0.6.0
             ===============================
             """.trimIndent(),
             DiagnosticLogger.diagnosticLogHeader(
@@ -31,7 +31,7 @@ class DiagnosticLogMetadataTest {
                 model = "23129RAA4G",
                 device = "sapphire",
                 sdkInt = 36,
-                appVersion = "0.5.0"
+                appVersion = "0.6.0"
             )
         )
     }
