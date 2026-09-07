@@ -10,17 +10,17 @@ class UpdateCheckerTest {
         val result = UpdateChecker.selectProductionApk(
             listOf(
                 ReleaseAsset(
-                    name = "kinewall-0.5.0-debug.apk",
-                    downloadUrl = "https://example.test/kinewall-0.5.0-debug.apk"
+                    name = "kinewall-0.6.0-debug.apk",
+                    downloadUrl = "https://example.test/kinewall-0.6.0-debug.apk"
                 ),
                 ReleaseAsset(
-                    name = "kinewall-0.5.0.apk",
-                    downloadUrl = "https://example.test/kinewall-0.5.0.apk"
+                    name = "kinewall-0.6.0.apk",
+                    downloadUrl = "https://example.test/kinewall-0.6.0.apk"
                 )
             )
         )
 
-        assertEquals("https://example.test/kinewall-0.5.0.apk", result)
+        assertEquals("https://example.test/kinewall-0.6.0.apk", result)
     }
 
     @Test
@@ -28,8 +28,8 @@ class UpdateCheckerTest {
         val result = UpdateChecker.selectProductionApk(
             listOf(
                 ReleaseAsset(
-                    name = "kinewall-0.5.0-debug.apk",
-                    downloadUrl = "https://example.test/kinewall-0.5.0-debug.apk"
+                    name = "kinewall-0.6.0-debug.apk",
+                    downloadUrl = "https://example.test/kinewall-0.6.0-debug.apk"
                 )
             )
         )
@@ -40,7 +40,7 @@ class UpdateCheckerTest {
     @Test
     fun nonHttpsApkIsRejected() {
         val result = UpdateChecker.selectProductionApk(
-            listOf(ReleaseAsset("kinewall-0.5.0.apk", "http://example.test/kinewall.apk"))
+            listOf(ReleaseAsset("kinewall-0.6.0.apk", "http://example.test/kinewall.apk"))
         )
 
         assertNull(result)
