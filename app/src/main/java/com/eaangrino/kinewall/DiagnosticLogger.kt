@@ -91,12 +91,29 @@ object DiagnosticLogger {
                 val logDirectory = getLogDirectory(applicationContext, createIfMissing = true)
                     ?: error("Unable to create diagnostics directory")
                 val logFile = File(logDirectory, logFileName(now))
+                val shouldWriteHeader = logFile.length() == 0L
+                val datePart = SimpleDateFormat(LOG_DATE_PATTERN, Locale.US).format(now)
                 val timestamp = SimpleDateFormat(
                     "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
                     Locale.US
                 ).format(now)
 
                 FileOutputStream(logFile, true).bufferedWriter().use { writer ->
+                    if (shouldWriteHeader) {
+                        writer.append(
+                            diagnosticLogHeader(
+                                date = datePart,
+                                manufacturer = Build.MANUFACTURER,
+                                model = Build.MODEL,
+                                device = Build.DEVICE,
+                                sdkInt = Build.VERSION.SDK_INT,
+                                appVersion = BuildConfig.VERSION_NAME
+                            )
+                        )
+                        writer.newLine()
+                        writer.newLine()
+                    }
+
                     writer.append(timestamp)
                     writer.append(" | ")
                     writer.append(safeEvent)
@@ -210,6 +227,26 @@ object DiagnosticLogger {
 
     fun isTodayLog(fileName: String): Boolean {
         return fileName == logFileName(Date())
+    }
+
+    internal fun diagnosticLogHeader(
+        date: String,
+        manufacturer: String,
+        model: String,
+        device: String,
+        sdkInt: Int,
+        appVersion: String
+    ): String {
+        return listOf(
+            "===== KineWall diagnostics =====",
+            "Date: $date",
+            "Manufacturer: $manufacturer",
+            "Model: $model",
+            "Device: $device",
+            "Android SDK: $sdkInt",
+            "App version: $appVersion",
+            "==============================="
+        ).joinToString(separator = "\n")
     }
 
     private fun awaitPendingWrites() {
