@@ -83,6 +83,7 @@ class ComposeMainActivity : ComponentActivity() {
         DiagnosticLogger.initialize(this)
         DiagnosticLogger.log(this, "ACTIVITY_CREATED")
         enableEdgeToEdge()
+        UpdateCheckScheduler.ensureScheduled(this)
 
         setContent {
             KinewallTheme {
@@ -118,11 +119,17 @@ class ComposeMainActivity : ComponentActivity() {
     }
 
     private fun shouldCheckForUpdates(savedInstanceState: Bundle?): Boolean {
+        val requestedUpdateCheck = intent.getBooleanExtra(EXTRA_CHECK_FOR_UPDATES, false)
+        val requestedUpdateInstall = intent.getBooleanExtra(
+            EXTRA_INSTALL_AVAILABLE_UPDATE,
+            false
+        )
         val launchedFromAppList = intent.action == Intent.ACTION_MAIN &&
-            intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+                intent.hasCategory(Intent.CATEGORY_LAUNCHER)
 
-        return launchedFromAppList &&
-            (savedInstanceState == null || !releaseCheckCompleted)
+        return requestedUpdateCheck || requestedUpdateInstall ||
+                (launchedFromAppList &&
+                        (savedInstanceState == null || !releaseCheckCompleted))
     }
 
     private fun checkForUpdates() {
@@ -142,7 +149,20 @@ class ComposeMainActivity : ComponentActivity() {
 
                     latestReleaseVersion = result?.latestVersion
                     releaseCheckCompleted = true
-                    result?.availableUpdate?.let(::showUpdateDialog)
+
+                    val installImmediately = intent.getBooleanExtra(
+                        EXTRA_INSTALL_AVAILABLE_UPDATE,
+                        false
+                    )
+                    intent.removeExtra(EXTRA_INSTALL_AVAILABLE_UPDATE)
+
+                    result?.availableUpdate?.let { update ->
+                        if (installImmediately) {
+                            prepareUpdateInstallation(update)
+                        } else {
+                            showUpdateDialog(update)
+                        }
+                    }
                 }
             },
             "kinewall-update-check"
@@ -389,6 +409,14 @@ class ComposeMainActivity : ComponentActivity() {
                             Intent(
                                 this,
                                 ComposeDiagnosticsActivity::class.java
+                            )
+                        )
+                    },
+                    onOpenUpdates = {
+                        startActivity(
+                            Intent(
+                                this,
+                                UpdateSettingsActivity::class.java
                             )
                         )
                     }
@@ -727,7 +755,8 @@ class ComposeMainActivity : ComponentActivity() {
         contentPadding: PaddingValues,
         releaseVersion: String?,
         releaseCheckCompleted: Boolean,
-        onOpenDiagnostics: () -> Unit
+        onOpenDiagnostics: () -> Unit,
+        onOpenUpdates: () -> Unit
     ) {
         ResponsiveScreen(
             contentPadding = contentPadding,
@@ -785,17 +814,33 @@ class ComposeMainActivity : ComponentActivity() {
             }
 
             Spacer(Modifier.height(16.dp))
-            OutlinedCard(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(20.dp)) {
-                    Text(
-                        text = stringResource(R.string.installed_version, BuildConfig.VERSION_NAME),
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                    Text(
-                        text = stringResource(R.string.github_release_version, releaseVersionText),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp)
+            OutlinedCard(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onOpenUpdates)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(
+                            text = stringResource(R.string.installed_version, BuildConfig.VERSION_NAME),
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                        Text(
+                            text = stringResource(R.string.github_release_version, releaseVersionText),
+                            style = MaterialTheme.typography.bodyLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(top = 8.dp)
+                        )
+                    }
+                    Icon(
+                        painter = painterResource(R.drawable.ic_chevron_right_24),
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
