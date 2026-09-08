@@ -45,8 +45,8 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "DISPLAY_ROTATION_CHANGED",
                 "previous=${displayRotationName(previousRotation)}, " +
-                    "current=${displayRotationName(newRotation)}, " +
-                    configurationSnapshot()
+                        "current=${displayRotationName(newRotation)}, " +
+                        configurationSnapshot()
             )
         }
     }
@@ -99,11 +99,11 @@ class VideoWallpaperService : WallpaperService() {
         configuration: Configuration = resources.configuration
     ): String {
         return "orientation=${orientationName(configuration.orientation)}, " +
-            "displayRotation=${displayRotationName(defaultDisplayRotation())}, " +
-            "screenWidthDp=${configuration.screenWidthDp}, " +
-            "screenHeightDp=${configuration.screenHeightDp}, " +
-            "smallestScreenWidthDp=${configuration.smallestScreenWidthDp}, " +
-            "densityDpi=${configuration.densityDpi}"
+                "displayRotation=${displayRotationName(defaultDisplayRotation())}, " +
+                "screenWidthDp=${configuration.screenWidthDp}, " +
+                "screenHeightDp=${configuration.screenHeightDp}, " +
+                "smallestScreenWidthDp=${configuration.smallestScreenWidthDp}, " +
+                "densityDpi=${configuration.densityDpi}"
     }
 
     private fun orientationName(orientation: Int): String {
@@ -232,9 +232,9 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "SURFACE_CHANGED",
                 "format=$format, width=$width, height=$height, " +
-                    "surfaceValid=${holder.surface.isValid}, visible=$isVisible, " +
-                    configurationSnapshot() + ", " +
-                    playerSnapshot(mediaPlayer)
+                        "surfaceValid=${holder.surface.isValid}, visible=$isVisible, " +
+                        configurationSnapshot() + ", " +
+                        playerSnapshot(mediaPlayer)
             )
         }
 
@@ -258,7 +258,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "VISIBILITY_CHANGED",
                 "visible=$visible, prepared=$isPrepared, preparing=$isPreparing, " +
-                    "surfaceAvailable=$surfaceAvailable, " + playerSnapshot(player)
+                        "surfaceAvailable=$surfaceAvailable, " + playerSnapshot(player)
             )
 
             if (!visible) {
@@ -348,14 +348,14 @@ class VideoWallpaperService : WallpaperService() {
 
                     if (canPanX) {
                         cropPositionX = (
-                            cropPositionX - (2f * deltaX / overflow.first)
-                        ).coerceIn(-1f, 1f)
+                                cropPositionX - (2f * deltaX / overflow.first)
+                                ).coerceIn(-1f, 1f)
                     }
 
                     if (canPanY) {
                         cropPositionY = (
-                            cropPositionY - (2f * deltaY / overflow.second)
-                        ).coerceIn(-1f, 1f)
+                                cropPositionY - (2f * deltaY / overflow.second)
+                                ).coerceIn(-1f, 1f)
                     }
 
                     videoRenderer?.setCropPosition(cropPositionX, cropPositionY)
@@ -390,7 +390,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "WALLPAPER_ENGINE_DESTROYED",
                 "visible=$isVisible, surfaceAvailable=$surfaceAvailable, " +
-                    playerSnapshot(mediaPlayer)
+                        playerSnapshot(mediaPlayer)
             )
 
             preferences.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener)
@@ -444,7 +444,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "VIDEO_CONFIGURATION_RELOAD",
                 "reason=$reason, preservePosition=$preservePosition, " +
-                    "resumePositionMs=$resumePositionMs"
+                        "resumePositionMs=$resumePositionMs"
             )
 
             createAndPreparePlayer(
@@ -472,7 +472,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "PLAYER_CREATED",
                 "uriScheme=${videoUri.scheme ?: "unknown"}, " +
-                    "uriAuthority=${videoUri.authority ?: "unknown"}"
+                        "uriAuthority=${videoUri.authority ?: "unknown"}"
             )
 
             try {
@@ -554,7 +554,7 @@ class VideoWallpaperService : WallpaperService() {
                         this@VideoWallpaperService,
                         "PLAYER_INFO",
                         "what=$what(${mediaInfoName(what)}), extra=$extra, " +
-                            playerSnapshot(infoPlayer)
+                                playerSnapshot(infoPlayer)
                     )
                     false
                 }
@@ -581,8 +581,8 @@ class VideoWallpaperService : WallpaperService() {
                         this@VideoWallpaperService,
                         "PLAYER_ERROR",
                         "what=$what(${mediaErrorName(what)}), " +
-                            "extra=$extra(${mediaErrorName(extra)}), " +
-                            playerSnapshot(errorPlayer)
+                                "extra=$extra(${mediaErrorName(extra)}), " +
+                                playerSnapshot(errorPlayer)
                     )
 
                     requestPipelineRecovery(
@@ -803,12 +803,12 @@ class VideoWallpaperService : WallpaperService() {
                             this@VideoWallpaperService,
                             "PLAYBACK_STALL_SUSPECTED",
                             "firstPositionMs=$firstPosition, " +
-                                "secondPositionMs=$secondPosition, " +
-                                "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
-                                "durationMs=$duration, " +
-                                "firstFramesPlayed=$firstFramesPlayed, " +
-                                "secondFramesPlayed=$secondFramesPlayed, " +
-                                playerSnapshot(player)
+                                    "secondPositionMs=$secondPosition, " +
+                                    "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
+                                    "durationMs=$duration, " +
+                                    "firstFramesPlayed=$firstFramesPlayed, " +
+                                    "secondFramesPlayed=$secondFramesPlayed, " +
+                                    playerSnapshot(player)
                         )
                         requestPipelineRecovery(
                             reason = "playback_clock_stall",
@@ -819,17 +819,17 @@ class VideoWallpaperService : WallpaperService() {
 
                     if (
                         secondRendererSnapshot.framesPresented ==
-                            firstRendererSnapshot.framesPresented
+                        firstRendererSnapshot.framesPresented
                     ) {
                         DiagnosticLogger.log(
                             this@VideoWallpaperService,
                             "RENDERER_OUTPUT_STALL_SUSPECTED",
                             "firstPositionMs=$firstPosition, " +
-                                "secondPositionMs=$secondPosition, " +
-                                "firstFramesPresented=${firstRendererSnapshot.framesPresented}, " +
-                                "secondFramesPresented=${secondRendererSnapshot.framesPresented}, " +
-                                "firstFramesAvailable=${firstRendererSnapshot.framesAvailable}, " +
-                                "secondFramesAvailable=${secondRendererSnapshot.framesAvailable}"
+                                    "secondPositionMs=$secondPosition, " +
+                                    "firstFramesPresented=${firstRendererSnapshot.framesPresented}, " +
+                                    "secondFramesPresented=${secondRendererSnapshot.framesPresented}, " +
+                                    "firstFramesAvailable=${firstRendererSnapshot.framesAvailable}, " +
+                                    "secondFramesAvailable=${secondRendererSnapshot.framesAvailable}"
                         )
                         requestPipelineRecovery(
                             reason = "renderer_frames_not_presenting",
@@ -847,11 +847,11 @@ class VideoWallpaperService : WallpaperService() {
                             this@VideoWallpaperService,
                             "VIDEO_OUTPUT_STALL_SUSPECTED",
                             "firstPositionMs=$firstPosition, " +
-                                "secondPositionMs=$secondPosition, " +
-                                "firstFramesPlayed=$firstFramesPlayed, " +
-                                "secondFramesPlayed=$secondFramesPlayed, " +
-                                "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
-                                playerSnapshot(player)
+                                    "secondPositionMs=$secondPosition, " +
+                                    "firstFramesPlayed=$firstFramesPlayed, " +
+                                    "secondFramesPlayed=$secondFramesPlayed, " +
+                                    "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
+                                    playerSnapshot(player)
                         )
                         requestPipelineRecovery(
                             reason = "video_frames_not_advancing",
@@ -949,7 +949,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "PIPELINE_RECOVERY_REQUESTED",
                 "reason=$reason, resumePositionMs=$resumePositionMs, " +
-                    rendererSnapshot(videoRenderer)
+                        rendererSnapshot(videoRenderer)
             )
 
             releasePlayer("pipeline_recovery_$reason")
@@ -973,7 +973,7 @@ class VideoWallpaperService : WallpaperService() {
                     this@VideoWallpaperService,
                     "RENDERER_ATTACH_SKIPPED",
                     "reason=$reason, surfaceAvailable=$surfaceAvailable, " +
-                        "outputSurfaceValid=${outputSurface.isValid}"
+                            "outputSurfaceValid=${outputSurface.isValid}"
                 )
                 return
             }
@@ -1072,10 +1072,10 @@ class VideoWallpaperService : WallpaperService() {
             )
 
             return (
-                videoWidth * scale - outputWidth
-            ).coerceAtLeast(0f) to (
-                videoHeight * scale - outputHeight
-            ).coerceAtLeast(0f)
+                    videoWidth * scale - outputWidth
+                    ).coerceAtLeast(0f) to (
+                    videoHeight * scale - outputHeight
+                    ).coerceAtLeast(0f)
         }
 
         private fun persistCropPosition() {
@@ -1115,12 +1115,12 @@ class VideoWallpaperService : WallpaperService() {
             }
 
             return "isPlaying=${safeIsPlaying(player)}, " +
-                "positionMs=${safeCurrentPosition(player)}, " +
-                "durationMs=${safeDuration(player)}, " +
-                "videoWidth=${safeVideoWidth(player)}, " +
-                "videoHeight=${safeVideoHeight(player)}, " +
-                "framesPlayed=${safeVideoFramesPlayed(player)}, " +
-                "framesDropped=${safeVideoFramesDropped(player)}"
+                    "positionMs=${safeCurrentPosition(player)}, " +
+                    "durationMs=${safeDuration(player)}, " +
+                    "videoWidth=${safeVideoWidth(player)}, " +
+                    "videoHeight=${safeVideoHeight(player)}, " +
+                    "framesPlayed=${safeVideoFramesPlayed(player)}, " +
+                    "framesDropped=${safeVideoFramesDropped(player)}"
         }
 
         private fun rendererSnapshot(renderer: VideoFrameRenderer?): String {
@@ -1138,10 +1138,10 @@ class VideoWallpaperService : WallpaperService() {
                 ?.let { now - it }
 
             return "rendererFailed=${snapshot.failed}, " +
-                "rendererFramesAvailable=${snapshot.framesAvailable}, " +
-                "rendererFramesPresented=${snapshot.framesPresented}, " +
-                "lastFrameAvailableAgeMs=$frameAvailableAgeMs, " +
-                "lastFramePresentedAgeMs=$framePresentedAgeMs"
+                    "rendererFramesAvailable=${snapshot.framesAvailable}, " +
+                    "rendererFramesPresented=${snapshot.framesPresented}, " +
+                    "lastFrameAvailableAgeMs=$frameAvailableAgeMs, " +
+                    "lastFramePresentedAgeMs=$framePresentedAgeMs"
         }
 
         private fun safeIsPlaying(player: MediaPlayer): Boolean? {
