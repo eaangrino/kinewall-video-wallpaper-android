@@ -34,6 +34,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -46,7 +48,6 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.PermanentNavigationDrawer
-import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -452,6 +453,7 @@ class ComposeMainActivity : ComponentActivity() {
                     }
                 ) {
                     MainScaffold(
+                        destination = destination,
                         showMenuButton = false,
                         onMenuClick = {},
                         content = content
@@ -476,6 +478,7 @@ class ComposeMainActivity : ComponentActivity() {
                     }
                 ) {
                     MainScaffold(
+                        destination = destination,
                         showMenuButton = true,
                         onMenuClick = { scope.launch { drawerState.open() } },
                         content = content
@@ -488,6 +491,7 @@ class ComposeMainActivity : ComponentActivity() {
     @OptIn(ExperimentalMaterial3Api::class)
     @Composable
     private fun MainScaffold(
+        destination: MainDestination,
         showMenuButton: Boolean,
         onMenuClick: () -> Unit,
         content: @Composable (PaddingValues) -> Unit
@@ -495,7 +499,18 @@ class ComposeMainActivity : ComponentActivity() {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text(stringResource(R.string.app_name)) },
+                    title = {
+                        val title = if (destination == MainDestination.WALLPAPER) {
+                            "${stringResource(R.string.app_name)} · ${stringResource(R.string.screen_title)}"
+                        } else {
+                            stringResource(R.string.app_name)
+                        }
+                        Text(
+                            text = title,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    },
                     navigationIcon = {
                         if (showMenuButton) {
                             IconButton(onClick = onMenuClick) {
@@ -564,19 +579,6 @@ class ComposeMainActivity : ComponentActivity() {
             contentPadding = contentPadding,
             maxContentWidth = 1120.dp
         ) { availableWidth ->
-            Text(
-                text = stringResource(R.string.screen_title),
-                style = MaterialTheme.typography.headlineLarge,
-                fontWeight = FontWeight.Medium
-            )
-            Text(
-                text = stringResource(R.string.screen_subtitle),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 6.dp)
-            )
-            Spacer(Modifier.height(28.dp))
-
             if (availableWidth >= 720.dp) {
                 Row(
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -645,31 +647,25 @@ class ComposeMainActivity : ComponentActivity() {
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
-            Column(Modifier.padding(20.dp)) {
+            Column(Modifier.padding(18.dp)) {
                 Text(
                     text = stringResource(R.string.video_section_title),
-                    style = MaterialTheme.typography.labelLarge
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Medium
                 )
                 Text(
                     text = selectedVideoName ?: stringResource(R.string.no_video_selected),
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 2,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 10.dp)
-                )
-                Text(
-                    text = stringResource(R.string.video_section_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp)
                 )
                 OutlinedButton(
                     onClick = onSelectVideo,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(top = 18.dp)
-                        .height(52.dp)
+                        .padding(top = 16.dp)
+                        .height(48.dp)
                 ) {
                     Icon(
                         painterResource(R.drawable.ic_video_library_24),
@@ -688,8 +684,10 @@ class ComposeMainActivity : ComponentActivity() {
         onScaleModeChange: (String) -> Unit,
         modifier: Modifier = Modifier
     ) {
+        var expanded by remember { mutableStateOf(false) }
+
         OutlinedCard(modifier = modifier) {
-            Column(Modifier.padding(20.dp)) {
+            Column(Modifier.padding(18.dp)) {
                 Text(
                     text = stringResource(R.string.display_section_title),
                     style = MaterialTheme.typography.titleMedium,
@@ -697,57 +695,57 @@ class ComposeMainActivity : ComponentActivity() {
                 )
                 Text(
                     text = stringResource(R.string.display_section_hint),
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 6.dp)
-                )
-                Spacer(Modifier.height(12.dp))
-                ScaleModeOption(
-                    selected = scaleMode == SCALE_MODE_CROP,
-                    title = stringResource(R.string.scale_crop),
-                    description = stringResource(R.string.scale_crop_hint),
-                    onClick = { onScaleModeChange(SCALE_MODE_CROP) }
-                )
-                Spacer(Modifier.height(8.dp))
-                ScaleModeOption(
-                    selected = scaleMode == SCALE_MODE_STRETCH,
-                    title = stringResource(R.string.scale_stretch),
-                    description = stringResource(R.string.scale_stretch_hint),
-                    onClick = { onScaleModeChange(SCALE_MODE_STRETCH) }
-                )
-            }
-        }
-    }
-
-    @Composable
-    private fun ScaleModeOption(
-        selected: Boolean,
-        title: String,
-        description: String,
-        onClick: () -> Unit
-    ) {
-        Row(
-            verticalAlignment = Alignment.Top,
-            modifier = Modifier.fillMaxWidth()
-        ) {
-            RadioButton(
-                selected = selected,
-                onClick = onClick
-            )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(top = 10.dp, end = 4.dp)
-            ) {
-                Text(
-                    text = title,
-                    style = MaterialTheme.typography.bodyLarge
-                )
-                Text(
-                    text = description,
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(top = 2.dp)
+                    modifier = Modifier.padding(top = 4.dp)
+                )
+
+                Box(
+                    modifier = Modifier.padding(top = 14.dp)
+                ) {
+                    OutlinedButton(onClick = { expanded = true }) {
+                        Text(
+                            stringResource(
+                                if (scaleMode == SCALE_MODE_CROP) {
+                                    R.string.scale_crop
+                                } else {
+                                    R.string.scale_stretch
+                                }
+                            )
+                        )
+                    }
+                    DropdownMenu(
+                        expanded = expanded,
+                        onDismissRequest = { expanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.scale_crop)) },
+                            onClick = {
+                                expanded = false
+                                onScaleModeChange(SCALE_MODE_CROP)
+                            }
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.scale_stretch)) },
+                            onClick = {
+                                expanded = false
+                                onScaleModeChange(SCALE_MODE_STRETCH)
+                            }
+                        )
+                    }
+                }
+
+                Text(
+                    text = stringResource(
+                        if (scaleMode == SCALE_MODE_CROP) {
+                            R.string.scale_crop_hint
+                        } else {
+                            R.string.scale_stretch_hint
+                        }
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(top = 10.dp)
                 )
             }
         }
