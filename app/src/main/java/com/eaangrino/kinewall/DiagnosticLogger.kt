@@ -27,10 +27,7 @@ object DiagnosticLogger {
         val isToday: Boolean
     )
 
-    data class LogChunk(
-        val content: String,
-        val nextOffset: Long
-    )
+    data class LogChunk(val content: String, val nextOffset: Long)
 
     private const val TAG = "KineWallDiagnostics"
     private const val LOG_DIRECTORY = "diagnostics"
@@ -165,11 +162,7 @@ object DiagnosticLogger {
             .orEmpty()
     }
 
-    fun readLogChunk(
-        context: Context,
-        fileName: String,
-        offset: Long
-    ): LogChunk {
+    fun readLogChunk(context: Context, fileName: String, offset: Long): LogChunk {
         awaitPendingWrites()
         val file = requireLogFile(context.applicationContext, fileName)
 
@@ -195,11 +188,7 @@ object DiagnosticLogger {
         }
     }
 
-    fun copyLogTo(
-        context: Context,
-        fileName: String,
-        outputStream: OutputStream
-    ) {
+    fun copyLogTo(context: Context, fileName: String, outputStream: OutputStream) {
         awaitPendingWrites()
         val file = requireLogFile(context.applicationContext, fileName)
 
@@ -225,9 +214,7 @@ object DiagnosticLogger {
         deleteTask.get(WAIT_TIMEOUT_SECONDS, TimeUnit.SECONDS)
     }
 
-    fun isTodayLog(fileName: String): Boolean {
-        return fileName == logFileName(Date())
-    }
+    fun isTodayLog(fileName: String): Boolean = fileName == logFileName(Date())
 
     internal fun diagnosticLogHeader(
         date: String,
@@ -236,18 +223,16 @@ object DiagnosticLogger {
         device: String,
         sdkInt: Int,
         appVersion: String
-    ): String {
-        return listOf(
-            "===== KineWall diagnostics =====",
-            "Date: $date",
-            "Manufacturer: $manufacturer",
-            "Model: $model",
-            "Device: $device",
-            "Android SDK: $sdkInt",
-            "App version: $appVersion",
-            "==============================="
-        ).joinToString(separator = "\n")
-    }
+    ): String = listOf(
+        "===== KineWall diagnostics =====",
+        "Date: $date",
+        "Manufacturer: $manufacturer",
+        "Model: $model",
+        "Device: $device",
+        "Android SDK: $sdkInt",
+        "App version: $appVersion",
+        "==============================="
+    ).joinToString(separator = "\n")
 
     private fun awaitPendingWrites() {
         try {
@@ -257,10 +242,7 @@ object DiagnosticLogger {
         }
     }
 
-    private fun getLogDirectory(
-        context: Context,
-        createIfMissing: Boolean
-    ): File? {
+    private fun getLogDirectory(context: Context, createIfMissing: Boolean): File? {
         val directory = File(context.filesDir, LOG_DIRECTORY)
 
         if (directory.exists()) {
@@ -295,12 +277,10 @@ object DiagnosticLogger {
         return "$LOG_FILE_PREFIX$datePart$LOG_FILE_SUFFIX"
     }
 
-    private fun sanitize(value: String): String {
-        return value
-            .replace('\r', ' ')
-            .replace('\n', ' ')
-            .trim()
-    }
+    private fun sanitize(value: String): String = value
+        .replace('\r', ' ')
+        .replace('\n', ' ')
+        .trim()
 
     private fun stackTraceToString(throwable: Throwable): String {
         val buffer = StringWriter()

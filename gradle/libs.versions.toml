@@ -11,6 +11,7 @@ constraintlayout = "2.1.4"
 kotlin = "2.3.21"
 composeBom = "2026.08.00"
 work = "2.11.2"
+ktlintPlugin = "14.2.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -31,4 +32,5 @@ androidx-work-runtime = { group = "androidx.work", name = "work-runtime", versio
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+ktlint = { id = "org.jlleitschuh.gradle.ktlint", version.ref = "ktlintPlugin" }
 

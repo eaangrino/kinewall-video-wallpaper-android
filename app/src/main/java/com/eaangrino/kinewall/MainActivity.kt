@@ -286,9 +286,8 @@ class MainActivity : AppCompatActivity() {
             ?: getString(R.string.selected_video_fallback)
     }
 
-    private fun uriDescription(uri: Uri): String {
-        return "scheme=${uri.scheme ?: "unknown"}, authority=${uri.authority ?: "unknown"}"
-    }
+    private fun uriDescription(uri: Uri): String =
+        "scheme=${uri.scheme ?: "unknown"}, authority=${uri.authority ?: "unknown"}"
 
     companion object {
         private const val PREFERENCES_NAME = "kinewall_preferences"

@@ -1,18 +1,12 @@
 package com.eaangrino.kinewall
 
-import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
+import org.json.JSONObject
 
-internal data class AvailableUpdate(
-    val version: String,
-    val apkUrl: String
-)
+internal data class AvailableUpdate(val version: String, val apkUrl: String)
 
-internal data class ReleaseAsset(
-    val name: String,
-    val downloadUrl: String
-)
+internal data class ReleaseAsset(val name: String, val downloadUrl: String)
 
 internal data class ReleaseCheckResult(
     val latestVersion: String,
@@ -84,12 +78,11 @@ internal object UpdateChecker {
         )
     }
 
-    internal fun selectProductionApk(assets: List<ReleaseAsset>): String? {
-        return assets.firstOrNull { asset ->
+    internal fun selectProductionApk(assets: List<ReleaseAsset>): String? =
+        assets.firstOrNull { asset ->
             val normalizedName = asset.name.lowercase()
             normalizedName.endsWith(".apk") &&
                 !normalizedName.contains("debug") &&
                 asset.downloadUrl.startsWith("https://")
         }?.downloadUrl
-    }
 }

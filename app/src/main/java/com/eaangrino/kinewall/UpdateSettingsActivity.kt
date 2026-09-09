@@ -80,7 +80,9 @@ class UpdateSettingsActivity : ComponentActivity() {
         if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
         if (checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) ==
             PackageManager.PERMISSION_GRANTED
-        ) return
+        ) {
+            return
+        }
 
         requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 2101)
     }
@@ -281,7 +283,9 @@ class UpdateSettingsActivity : ComponentActivity() {
 
                                     UpdateCheckFrequency.MONTHLY -> {
                                         Text(
-                                            text = stringResource(R.string.update_monthly_last_day_hint),
+                                            text = stringResource(
+                                                R.string.update_monthly_last_day_hint
+                                            ),
                                             style = MaterialTheme.typography.bodyMedium,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                                             modifier = Modifier.padding(bottom = 8.dp)
@@ -384,11 +388,7 @@ class UpdateSettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun FrequencyOption(
-        selected: Boolean,
-        title: String,
-        onClick: () -> Unit
-    ) {
+    private fun FrequencyOption(selected: Boolean, title: String, onClick: () -> Unit) {
         Row(
             horizontalArrangement = Arrangement.Start,
             verticalAlignment = Alignment.CenterVertically,
@@ -407,10 +407,7 @@ class UpdateSettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun TimeSettingRow(
-        schedule: UpdateScheduleSettings,
-        onClick: () -> Unit
-    ) {
+    private fun TimeSettingRow(schedule: UpdateScheduleSettings, onClick: () -> Unit) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
             modifier = Modifier.fillMaxWidth()
@@ -434,10 +431,7 @@ class UpdateSettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun WeeklyDaySettingRow(
-        selectedDay: DayOfWeek,
-        onDaySelected: (DayOfWeek) -> Unit
-    ) {
+    private fun WeeklyDaySettingRow(selectedDay: DayOfWeek, onDaySelected: (DayOfWeek) -> Unit) {
         var expanded by remember { mutableStateOf(false) }
 
         Row(
@@ -480,19 +474,17 @@ class UpdateSettingsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun dayOfWeekLabel(day: DayOfWeek): String {
-        return stringResource(
-            when (day) {
-                DayOfWeek.MONDAY -> R.string.weekday_monday
-                DayOfWeek.TUESDAY -> R.string.weekday_tuesday
-                DayOfWeek.WEDNESDAY -> R.string.weekday_wednesday
-                DayOfWeek.THURSDAY -> R.string.weekday_thursday
-                DayOfWeek.FRIDAY -> R.string.weekday_friday
-                DayOfWeek.SATURDAY -> R.string.weekday_saturday
-                DayOfWeek.SUNDAY -> R.string.weekday_sunday
-            }
-        )
-    }
+    private fun dayOfWeekLabel(day: DayOfWeek): String = stringResource(
+        when (day) {
+            DayOfWeek.MONDAY -> R.string.weekday_monday
+            DayOfWeek.TUESDAY -> R.string.weekday_tuesday
+            DayOfWeek.WEDNESDAY -> R.string.weekday_wednesday
+            DayOfWeek.THURSDAY -> R.string.weekday_thursday
+            DayOfWeek.FRIDAY -> R.string.weekday_friday
+            DayOfWeek.SATURDAY -> R.string.weekday_saturday
+            DayOfWeek.SUNDAY -> R.string.weekday_sunday
+        }
+    )
 
     @Composable
     private fun CheckStatusText() {

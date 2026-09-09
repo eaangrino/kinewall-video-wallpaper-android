@@ -498,10 +498,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun ViewerActions(
-        fileName: String,
-        onDelete: () -> Unit
-    ) {
+    private fun ViewerActions(fileName: String, onDelete: () -> Unit) {
         var expanded by remember { mutableStateOf(false) }
 
         Box {
@@ -566,10 +563,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun LogViewer(
-        content: String,
-        contentPaddingTop: androidx.compose.ui.unit.Dp
-    ) {
+    private fun LogViewer(content: String, contentPaddingTop: androidx.compose.ui.unit.Dp) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
             val horizontalPadding = when {
                 maxWidth >= 840.dp -> 28.dp
@@ -605,17 +599,15 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         }
     }
 
-    private fun loadLogs(): List<DiagnosticLogger.DiagnosticLogFile> {
-        return try {
-            DiagnosticLogger.listLogs(this)
-        } catch (error: Exception) {
-            DiagnosticLogger.log(
-                this,
-                "DIAGNOSTIC_LOG_LIST_FAILED",
-                throwable = error
-            )
-            emptyList()
-        }
+    private fun loadLogs(): List<DiagnosticLogger.DiagnosticLogFile> = try {
+        DiagnosticLogger.listLogs(this)
+    } catch (error: Exception) {
+        DiagnosticLogger.log(
+            this,
+            "DIAGNOSTIC_LOG_LIST_FAILED",
+            throwable = error
+        )
+        emptyList()
     }
 
     private fun downloadLog(fileName: String) {
@@ -669,34 +661,32 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         }
     }
 
-    private fun deleteLog(fileName: String): Boolean {
-        return try {
-            DiagnosticLogger.log(
-                this,
-                "DIAGNOSTIC_LOG_DELETE_REQUESTED",
-                "file=$fileName"
-            )
-            DiagnosticLogger.deleteLog(this, fileName)
-            Toast.makeText(
-                this,
-                R.string.diagnostic_log_deleted,
-                Toast.LENGTH_SHORT
-            ).show()
-            true
-        } catch (error: Exception) {
-            DiagnosticLogger.log(
-                this,
-                "DIAGNOSTIC_LOG_DELETE_FAILED",
-                "file=$fileName",
-                error
-            )
-            Toast.makeText(
-                this,
-                R.string.diagnostic_log_delete_failed,
-                Toast.LENGTH_LONG
-            ).show()
-            false
-        }
+    private fun deleteLog(fileName: String): Boolean = try {
+        DiagnosticLogger.log(
+            this,
+            "DIAGNOSTIC_LOG_DELETE_REQUESTED",
+            "file=$fileName"
+        )
+        DiagnosticLogger.deleteLog(this, fileName)
+        Toast.makeText(
+            this,
+            R.string.diagnostic_log_deleted,
+            Toast.LENGTH_SHORT
+        ).show()
+        true
+    } catch (error: Exception) {
+        DiagnosticLogger.log(
+            this,
+            "DIAGNOSTIC_LOG_DELETE_FAILED",
+            "file=$fileName",
+            error
+        )
+        Toast.makeText(
+            this,
+            R.string.diagnostic_log_delete_failed,
+            Toast.LENGTH_LONG
+        ).show()
+        false
     }
 
     private fun logMetadata(log: DiagnosticLogger.DiagnosticLogFile): String {
