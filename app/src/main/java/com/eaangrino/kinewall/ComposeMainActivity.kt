@@ -713,6 +713,11 @@ class ComposeMainActivity : ComponentActivity() {
                                 }
                             )
                         )
+                        Spacer(Modifier.width(6.dp))
+                        Icon(
+                            painter = painterResource(R.drawable.ic_expand_more_24),
+                            contentDescription = null
+                        )
                     }
                     DropdownMenu(
                         expanded = expanded,
