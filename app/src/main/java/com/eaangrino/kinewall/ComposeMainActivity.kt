@@ -642,38 +642,38 @@ class ComposeMainActivity : ComponentActivity() {
         modifier: Modifier = Modifier
     ) {
         OutlinedCard(
-            modifier = modifier,
+            modifier = modifier.clickable(onClick = onSelectVideo),
             colors = CardDefaults.outlinedCardColors(
                 containerColor = MaterialTheme.colorScheme.surfaceVariant
             )
         ) {
-            Column(Modifier.padding(18.dp)) {
-                Text(
-                    text = stringResource(R.string.video_section_title),
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Medium
-                )
-                Text(
-                    text = selectedVideoName ?: stringResource(R.string.no_video_selected),
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.padding(top = 8.dp)
-                )
-                OutlinedButton(
-                    onClick = onSelectVideo,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(top = 16.dp)
-                        .height(48.dp)
-                ) {
-                    Icon(
-                        painterResource(R.drawable.ic_video_library_24),
-                        contentDescription = null
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(18.dp)
+            ) {
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        text = selectedVideoName ?: stringResource(R.string.no_video_selected),
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
-                    Spacer(Modifier.width(10.dp))
-                    Text(stringResource(R.string.select_video))
+                    Text(
+                        text = stringResource(R.string.video_section_hint),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
+                Spacer(Modifier.width(12.dp))
+                Icon(
+                    painter = painterResource(R.drawable.ic_chevron_right_24),
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
             }
         }
     }

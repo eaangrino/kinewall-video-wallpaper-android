@@ -6,8 +6,7 @@
     <string name="video_section_title">Wallpaper video</string>
     <string name="no_video_selected">No video selected</string>
     <string name="selected_video_fallback">Selected video</string>
-    <string name="video_section_hint">Choose a video stored on your device. Kinewall keeps read
-        access so it can play after a restart.</string>
+    <string name="video_section_hint">Choose a video stored on your device.</string>
     <string name="select_video">Choose video</string>
     <string name="display_section_title">Display mode</string>
     <string name="display_section_hint">Choose how the video fills the wallpaper surface.</string>
