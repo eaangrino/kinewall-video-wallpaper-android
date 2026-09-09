@@ -11,9 +11,8 @@ internal enum class UpdateCheckFrequency {
     MONTHLY;
 
     companion object {
-        fun fromStoredValue(value: String?): UpdateCheckFrequency {
-            return entries.firstOrNull { it.name == value } ?: DAILY
-        }
+        fun fromStoredValue(value: String?): UpdateCheckFrequency =
+            entries.firstOrNull { it.name == value } ?: DAILY
     }
 }
 
@@ -31,16 +30,12 @@ internal object UpdateScheduleConfig {
 }
 
 internal object UpdateScheduleCalculator {
-    fun nextCheckAt(
-        now: ZonedDateTime,
-        settings: UpdateScheduleSettings
-    ): ZonedDateTime {
-        return when (settings.frequency) {
+    fun nextCheckAt(now: ZonedDateTime, settings: UpdateScheduleSettings): ZonedDateTime =
+        when (settings.frequency) {
             UpdateCheckFrequency.DAILY -> nextDailyCheck(now, settings)
             UpdateCheckFrequency.WEEKLY -> nextWeeklyCheck(now, settings)
             UpdateCheckFrequency.MONTHLY -> nextMonthlyCheck(now, settings)
         }
-    }
 
     private fun nextDailyCheck(
         now: ZonedDateTime,
@@ -78,12 +73,9 @@ internal object UpdateScheduleCalculator {
             .atConfiguredTime(settings)
     }
 
-    private fun ZonedDateTime.atConfiguredTime(
-        settings: UpdateScheduleSettings
-    ): ZonedDateTime {
-        return withHour(settings.hour.coerceIn(0, 23))
+    private fun ZonedDateTime.atConfiguredTime(settings: UpdateScheduleSettings): ZonedDateTime =
+        withHour(settings.hour.coerceIn(0, 23))
             .withMinute(settings.minute.coerceIn(0, 59))
             .withSecond(0)
             .withNano(0)
-    }
 }

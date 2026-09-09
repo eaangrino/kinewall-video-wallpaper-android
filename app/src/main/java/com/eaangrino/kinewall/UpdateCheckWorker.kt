@@ -4,10 +4,8 @@ import android.content.Context
 import androidx.work.Worker
 import androidx.work.WorkerParameters
 
-internal class UpdateCheckWorker(
-    appContext: Context,
-    workerParams: WorkerParameters
-) : Worker(appContext, workerParams) {
+internal class UpdateCheckWorker(appContext: Context, workerParams: WorkerParameters) :
+    Worker(appContext, workerParams) {
 
     override fun doWork(): Result {
         try {

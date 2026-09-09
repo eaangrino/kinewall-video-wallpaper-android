@@ -20,9 +20,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
 
-internal class VideoFrameRenderer(
-    private val onError: (stage: String, error: Throwable?) -> Unit
-) {
+internal class VideoFrameRenderer(private val onError: (stage: String, error: Throwable?) -> Unit) {
 
     private val renderThread = HandlerThread("KinewallVideoRenderer").apply { start() }
     private val renderHandler = Handler(renderThread.looper)
@@ -60,16 +58,24 @@ internal class VideoFrameRenderer(
 
     private val textureTransform = FloatArray(16)
     private val vertexBuffer = floatBufferOf(
-        -1f, -1f,
-        1f, -1f,
-        -1f, 1f,
-        1f, 1f
+        -1f,
+        -1f,
+        1f,
+        -1f,
+        -1f,
+        1f,
+        1f,
+        1f
     )
     private val textureBuffer = floatBufferOf(
-        0f, 0f,
-        1f, 0f,
-        0f, 1f,
-        1f, 1f
+        0f,
+        0f,
+        1f,
+        0f,
+        0f,
+        1f,
+        1f,
+        1f
     )
 
     fun attach(outputSurface: Surface, onReady: (Surface) -> Unit) {
@@ -129,15 +135,13 @@ internal class VideoFrameRenderer(
         }
     }
 
-    fun playbackSnapshot(): PlaybackSnapshot {
-        return PlaybackSnapshot(
-            framesAvailable = framesAvailable.get(),
-            framesPresented = framesPresented.get(),
-            lastFrameAvailableElapsedMs = lastFrameAvailableElapsedMs.get(),
-            lastFramePresentedElapsedMs = lastFramePresentedElapsedMs.get(),
-            failed = failed.get()
-        )
-    }
+    fun playbackSnapshot(): PlaybackSnapshot = PlaybackSnapshot(
+        framesAvailable = framesAvailable.get(),
+        framesPresented = framesPresented.get(),
+        lastFrameAvailableElapsedMs = lastFrameAvailableElapsedMs.get(),
+        lastFramePresentedElapsedMs = lastFramePresentedElapsedMs.get(),
+        failed = failed.get()
+    )
 
     fun releaseAndWait(timeoutMs: Long = RELEASE_TIMEOUT_MS): Boolean {
         if (released.compareAndSet(false, true)) {
@@ -199,7 +203,8 @@ internal class VideoFrameRenderer(
                 configs.size,
                 configCount,
                 0
-            ) || configCount[0] == 0
+            ) ||
+            configCount[0] == 0
         ) {
             error("Unable to choose EGL config")
         }
@@ -210,7 +215,8 @@ internal class VideoFrameRenderer(
             config,
             EGL14.EGL_NO_CONTEXT,
             intArrayOf(
-                EGL14.EGL_CONTEXT_CLIENT_VERSION, 2,
+                EGL14.EGL_CONTEXT_CLIENT_VERSION,
+                2,
                 EGL14.EGL_NONE
             ),
             0
@@ -612,14 +618,13 @@ internal class VideoFrameRenderer(
             }
         """
 
-        private fun floatBufferOf(vararg values: Float): FloatBuffer {
-            return ByteBuffer.allocateDirect(values.size * Float.SIZE_BYTES)
+        private fun floatBufferOf(vararg values: Float): FloatBuffer =
+            ByteBuffer.allocateDirect(values.size * Float.SIZE_BYTES)
                 .order(ByteOrder.nativeOrder())
                 .asFloatBuffer()
                 .apply {
                     put(values)
                     position(0)
                 }
-        }
     }
 }

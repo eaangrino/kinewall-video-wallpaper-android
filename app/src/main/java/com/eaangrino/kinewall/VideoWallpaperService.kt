@@ -45,8 +45,8 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "DISPLAY_ROTATION_CHANGED",
                 "previous=${displayRotationName(previousRotation)}, " +
-                        "current=${displayRotationName(newRotation)}, " +
-                        configurationSnapshot()
+                    "current=${displayRotationName(newRotation)}, " +
+                    configurationSnapshot()
             )
         }
     }
@@ -89,41 +89,33 @@ class VideoWallpaperService : WallpaperService() {
         super.onDestroy()
     }
 
-    private fun defaultDisplayRotation(): Int? {
-        return displayManager
-            ?.getDisplay(Display.DEFAULT_DISPLAY)
-            ?.rotation
-    }
+    private fun defaultDisplayRotation(): Int? = displayManager
+        ?.getDisplay(Display.DEFAULT_DISPLAY)
+        ?.rotation
 
     private fun configurationSnapshot(
         configuration: Configuration = resources.configuration
-    ): String {
-        return "orientation=${orientationName(configuration.orientation)}, " +
-                "displayRotation=${displayRotationName(defaultDisplayRotation())}, " +
-                "screenWidthDp=${configuration.screenWidthDp}, " +
-                "screenHeightDp=${configuration.screenHeightDp}, " +
-                "smallestScreenWidthDp=${configuration.smallestScreenWidthDp}, " +
-                "densityDpi=${configuration.densityDpi}"
+    ): String = "orientation=${orientationName(configuration.orientation)}, " +
+        "displayRotation=${displayRotationName(defaultDisplayRotation())}, " +
+        "screenWidthDp=${configuration.screenWidthDp}, " +
+        "screenHeightDp=${configuration.screenHeightDp}, " +
+        "smallestScreenWidthDp=${configuration.smallestScreenWidthDp}, " +
+        "densityDpi=${configuration.densityDpi}"
+
+    private fun orientationName(orientation: Int): String = when (orientation) {
+        Configuration.ORIENTATION_PORTRAIT -> "PORTRAIT"
+        Configuration.ORIENTATION_LANDSCAPE -> "LANDSCAPE"
+        Configuration.ORIENTATION_UNDEFINED -> "UNDEFINED"
+        else -> "UNKNOWN($orientation)"
     }
 
-    private fun orientationName(orientation: Int): String {
-        return when (orientation) {
-            Configuration.ORIENTATION_PORTRAIT -> "PORTRAIT"
-            Configuration.ORIENTATION_LANDSCAPE -> "LANDSCAPE"
-            Configuration.ORIENTATION_UNDEFINED -> "UNDEFINED"
-            else -> "UNKNOWN($orientation)"
-        }
-    }
-
-    private fun displayRotationName(rotation: Int?): String {
-        return when (rotation) {
-            Surface.ROTATION_0 -> "ROTATION_0(0deg)"
-            Surface.ROTATION_90 -> "ROTATION_90(90deg)"
-            Surface.ROTATION_180 -> "ROTATION_180(180deg)"
-            Surface.ROTATION_270 -> "ROTATION_270(270deg)"
-            null -> "UNKNOWN"
-            else -> "UNKNOWN($rotation)"
-        }
+    private fun displayRotationName(rotation: Int?): String = when (rotation) {
+        Surface.ROTATION_0 -> "ROTATION_0(0deg)"
+        Surface.ROTATION_90 -> "ROTATION_90(90deg)"
+        Surface.ROTATION_180 -> "ROTATION_180(180deg)"
+        Surface.ROTATION_270 -> "ROTATION_270(270deg)"
+        null -> "UNKNOWN"
+        else -> "UNKNOWN($rotation)"
     }
 
     inner class VideoWallpaperEngine : Engine() {
@@ -217,12 +209,7 @@ class VideoWallpaperService : WallpaperService() {
             )
         }
 
-        override fun onSurfaceChanged(
-            holder: SurfaceHolder,
-            format: Int,
-            width: Int,
-            height: Int
-        ) {
+        override fun onSurfaceChanged(holder: SurfaceHolder, format: Int, width: Int, height: Int) {
             super.onSurfaceChanged(holder, format, width, height)
             outputWidth = width
             outputHeight = height
@@ -232,9 +219,9 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "SURFACE_CHANGED",
                 "format=$format, width=$width, height=$height, " +
-                        "surfaceValid=${holder.surface.isValid}, visible=$isVisible, " +
-                        configurationSnapshot() + ", " +
-                        playerSnapshot(mediaPlayer)
+                    "surfaceValid=${holder.surface.isValid}, visible=$isVisible, " +
+                    configurationSnapshot() + ", " +
+                    playerSnapshot(mediaPlayer)
             )
         }
 
@@ -258,7 +245,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "VISIBILITY_CHANGED",
                 "visible=$visible, prepared=$isPrepared, preparing=$isPreparing, " +
-                        "surfaceAvailable=$surfaceAvailable, " + playerSnapshot(player)
+                    "surfaceAvailable=$surfaceAvailable, " + playerSnapshot(player)
             )
 
             if (!visible) {
@@ -348,14 +335,14 @@ class VideoWallpaperService : WallpaperService() {
 
                     if (canPanX) {
                         cropPositionX = (
-                                cropPositionX - (2f * deltaX / overflow.first)
-                                ).coerceIn(-1f, 1f)
+                            cropPositionX - (2f * deltaX / overflow.first)
+                            ).coerceIn(-1f, 1f)
                     }
 
                     if (canPanY) {
                         cropPositionY = (
-                                cropPositionY - (2f * deltaY / overflow.second)
-                                ).coerceIn(-1f, 1f)
+                            cropPositionY - (2f * deltaY / overflow.second)
+                            ).coerceIn(-1f, 1f)
                     }
 
                     videoRenderer?.setCropPosition(cropPositionX, cropPositionY)
@@ -390,7 +377,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "WALLPAPER_ENGINE_DESTROYED",
                 "visible=$isVisible, surfaceAvailable=$surfaceAvailable, " +
-                        playerSnapshot(mediaPlayer)
+                    playerSnapshot(mediaPlayer)
             )
 
             preferences.unregisterOnSharedPreferenceChangeListener(preferenceChangeListener)
@@ -401,10 +388,7 @@ class VideoWallpaperService : WallpaperService() {
             super.onDestroy()
         }
 
-        private fun reloadConfiguredVideo(
-            reason: String,
-            preservePosition: Boolean
-        ) {
+        private fun reloadConfiguredVideo(reason: String, preservePosition: Boolean) {
             if (!surfaceAvailable) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
@@ -444,7 +428,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "VIDEO_CONFIGURATION_RELOAD",
                 "reason=$reason, preservePosition=$preservePosition, " +
-                        "resumePositionMs=$resumePositionMs"
+                    "resumePositionMs=$resumePositionMs"
             )
 
             createAndPreparePlayer(
@@ -472,7 +456,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "PLAYER_CREATED",
                 "uriScheme=${videoUri.scheme ?: "unknown"}, " +
-                        "uriAuthority=${videoUri.authority ?: "unknown"}"
+                    "uriAuthority=${videoUri.authority ?: "unknown"}"
             )
 
             try {
@@ -554,7 +538,7 @@ class VideoWallpaperService : WallpaperService() {
                         this@VideoWallpaperService,
                         "PLAYER_INFO",
                         "what=$what(${mediaInfoName(what)}), extra=$extra, " +
-                                playerSnapshot(infoPlayer)
+                            playerSnapshot(infoPlayer)
                     )
                     false
                 }
@@ -581,8 +565,8 @@ class VideoWallpaperService : WallpaperService() {
                         this@VideoWallpaperService,
                         "PLAYER_ERROR",
                         "what=$what(${mediaErrorName(what)}), " +
-                                "extra=$extra(${mediaErrorName(extra)}), " +
-                                playerSnapshot(errorPlayer)
+                            "extra=$extra(${mediaErrorName(extra)}), " +
+                            playerSnapshot(errorPlayer)
                     )
 
                     requestPipelineRecovery(
@@ -610,10 +594,7 @@ class VideoWallpaperService : WallpaperService() {
             }
         }
 
-        private fun startPlayer(
-            player: MediaPlayer,
-            reason: String
-        ) {
+        private fun startPlayer(player: MediaPlayer, reason: String) {
             try {
                 player.start()
                 notPlayingWhileVisibleReported = false
@@ -638,10 +619,7 @@ class VideoWallpaperService : WallpaperService() {
             }
         }
 
-        private fun pausePlayer(
-            player: MediaPlayer,
-            reason: String
-        ) {
+        private fun pausePlayer(player: MediaPlayer, reason: String) {
             stopHeartbeat()
 
             try {
@@ -803,12 +781,12 @@ class VideoWallpaperService : WallpaperService() {
                             this@VideoWallpaperService,
                             "PLAYBACK_STALL_SUSPECTED",
                             "firstPositionMs=$firstPosition, " +
-                                    "secondPositionMs=$secondPosition, " +
-                                    "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
-                                    "durationMs=$duration, " +
-                                    "firstFramesPlayed=$firstFramesPlayed, " +
-                                    "secondFramesPlayed=$secondFramesPlayed, " +
-                                    playerSnapshot(player)
+                                "secondPositionMs=$secondPosition, " +
+                                "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
+                                "durationMs=$duration, " +
+                                "firstFramesPlayed=$firstFramesPlayed, " +
+                                "secondFramesPlayed=$secondFramesPlayed, " +
+                                playerSnapshot(player)
                         )
                         requestPipelineRecovery(
                             reason = "playback_clock_stall",
@@ -825,11 +803,15 @@ class VideoWallpaperService : WallpaperService() {
                             this@VideoWallpaperService,
                             "RENDERER_OUTPUT_STALL_SUSPECTED",
                             "firstPositionMs=$firstPosition, " +
-                                    "secondPositionMs=$secondPosition, " +
-                                    "firstFramesPresented=${firstRendererSnapshot.framesPresented}, " +
-                                    "secondFramesPresented=${secondRendererSnapshot.framesPresented}, " +
-                                    "firstFramesAvailable=${firstRendererSnapshot.framesAvailable}, " +
-                                    "secondFramesAvailable=${secondRendererSnapshot.framesAvailable}"
+                                "secondPositionMs=$secondPosition, " +
+                                "firstFramesPresented=" +
+                                firstRendererSnapshot.framesPresented +
+                                ", secondFramesPresented=" +
+                                secondRendererSnapshot.framesPresented +
+                                ", firstFramesAvailable=" +
+                                firstRendererSnapshot.framesAvailable +
+                                ", secondFramesAvailable=" +
+                                secondRendererSnapshot.framesAvailable
                         )
                         requestPipelineRecovery(
                             reason = "renderer_frames_not_presenting",
@@ -847,11 +829,11 @@ class VideoWallpaperService : WallpaperService() {
                             this@VideoWallpaperService,
                             "VIDEO_OUTPUT_STALL_SUSPECTED",
                             "firstPositionMs=$firstPosition, " +
-                                    "secondPositionMs=$secondPosition, " +
-                                    "firstFramesPlayed=$firstFramesPlayed, " +
-                                    "secondFramesPlayed=$secondFramesPlayed, " +
-                                    "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
-                                    playerSnapshot(player)
+                                "secondPositionMs=$secondPosition, " +
+                                "firstFramesPlayed=$firstFramesPlayed, " +
+                                "secondFramesPlayed=$secondFramesPlayed, " +
+                                "probeDelayMs=$STALL_PROBE_DELAY_MS, " +
+                                playerSnapshot(player)
                         )
                         requestPipelineRecovery(
                             reason = "video_frames_not_advancing",
@@ -863,10 +845,7 @@ class VideoWallpaperService : WallpaperService() {
             )
         }
 
-        private fun requestPipelineRecovery(
-            reason: String,
-            resumePositionMs: Int?
-        ) {
+        private fun requestPipelineRecovery(reason: String, resumePositionMs: Int?) {
             if (!surfaceAvailable || !isVisible) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
@@ -911,10 +890,7 @@ class VideoWallpaperService : WallpaperService() {
             )
         }
 
-        private fun performPipelineRecovery(
-            reason: String,
-            resumePositionMs: Int?
-        ) {
+        private fun performPipelineRecovery(reason: String, resumePositionMs: Int?) {
             if (!surfaceAvailable || !isVisible) {
                 DiagnosticLogger.log(
                     this@VideoWallpaperService,
@@ -949,7 +925,7 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "PIPELINE_RECOVERY_REQUESTED",
                 "reason=$reason, resumePositionMs=$resumePositionMs, " +
-                        rendererSnapshot(videoRenderer)
+                    rendererSnapshot(videoRenderer)
             )
 
             releasePlayer("pipeline_recovery_$reason")
@@ -973,7 +949,7 @@ class VideoWallpaperService : WallpaperService() {
                     this@VideoWallpaperService,
                     "RENDERER_ATTACH_SKIPPED",
                     "reason=$reason, surfaceAvailable=$surfaceAvailable, " +
-                            "outputSurfaceValid=${outputSurface.isValid}"
+                        "outputSurfaceValid=${outputSurface.isValid}"
                 )
                 return
             }
@@ -1050,11 +1026,9 @@ class VideoWallpaperService : WallpaperService() {
             )
         }
 
-        private fun currentResumePosition(): Int? {
-            return mediaPlayer
-                ?.let { player -> safeCurrentPosition(player) }
-                ?.coerceAtLeast(0)
-        }
+        private fun currentResumePosition(): Int? = mediaPlayer
+            ?.let { player -> safeCurrentPosition(player) }
+            ?.coerceAtLeast(0)
 
         private fun cropOverflow(): Pair<Float, Float> {
             if (
@@ -1072,10 +1046,10 @@ class VideoWallpaperService : WallpaperService() {
             )
 
             return (
-                    videoWidth * scale - outputWidth
-                    ).coerceAtLeast(0f) to (
-                    videoHeight * scale - outputHeight
-                    ).coerceAtLeast(0f)
+                videoWidth * scale - outputWidth
+                ).coerceAtLeast(0f) to (
+                videoHeight * scale - outputHeight
+                ).coerceAtLeast(0f)
         }
 
         private fun persistCropPosition() {
@@ -1115,12 +1089,12 @@ class VideoWallpaperService : WallpaperService() {
             }
 
             return "isPlaying=${safeIsPlaying(player)}, " +
-                    "positionMs=${safeCurrentPosition(player)}, " +
-                    "durationMs=${safeDuration(player)}, " +
-                    "videoWidth=${safeVideoWidth(player)}, " +
-                    "videoHeight=${safeVideoHeight(player)}, " +
-                    "framesPlayed=${safeVideoFramesPlayed(player)}, " +
-                    "framesDropped=${safeVideoFramesDropped(player)}"
+                "positionMs=${safeCurrentPosition(player)}, " +
+                "durationMs=${safeDuration(player)}, " +
+                "videoWidth=${safeVideoWidth(player)}, " +
+                "videoHeight=${safeVideoHeight(player)}, " +
+                "framesPlayed=${safeVideoFramesPlayed(player)}, " +
+                "framesDropped=${safeVideoFramesDropped(player)}"
         }
 
         private fun rendererSnapshot(renderer: VideoFrameRenderer?): String {
@@ -1138,101 +1112,83 @@ class VideoWallpaperService : WallpaperService() {
                 ?.let { now - it }
 
             return "rendererFailed=${snapshot.failed}, " +
-                    "rendererFramesAvailable=${snapshot.framesAvailable}, " +
-                    "rendererFramesPresented=${snapshot.framesPresented}, " +
-                    "lastFrameAvailableAgeMs=$frameAvailableAgeMs, " +
-                    "lastFramePresentedAgeMs=$framePresentedAgeMs"
+                "rendererFramesAvailable=${snapshot.framesAvailable}, " +
+                "rendererFramesPresented=${snapshot.framesPresented}, " +
+                "lastFrameAvailableAgeMs=$frameAvailableAgeMs, " +
+                "lastFramePresentedAgeMs=$framePresentedAgeMs"
         }
 
-        private fun safeIsPlaying(player: MediaPlayer): Boolean? {
-            return try {
-                player.isPlaying
-            } catch (_: IllegalStateException) {
-                null
-            }
+        private fun safeIsPlaying(player: MediaPlayer): Boolean? = try {
+            player.isPlaying
+        } catch (_: IllegalStateException) {
+            null
         }
 
-        private fun safeCurrentPosition(player: MediaPlayer): Int? {
-            return try {
-                player.currentPosition
-            } catch (_: IllegalStateException) {
-                null
-            }
+        private fun safeCurrentPosition(player: MediaPlayer): Int? = try {
+            player.currentPosition
+        } catch (_: IllegalStateException) {
+            null
         }
 
-        private fun safeDuration(player: MediaPlayer): Int? {
-            return try {
-                player.duration
-            } catch (_: IllegalStateException) {
-                null
-            }
+        private fun safeDuration(player: MediaPlayer): Int? = try {
+            player.duration
+        } catch (_: IllegalStateException) {
+            null
         }
 
-        private fun safeVideoWidth(player: MediaPlayer): Int? {
-            return try {
-                player.videoWidth
-            } catch (_: IllegalStateException) {
-                null
-            }
+        private fun safeVideoWidth(player: MediaPlayer): Int? = try {
+            player.videoWidth
+        } catch (_: IllegalStateException) {
+            null
         }
 
-        private fun safeVideoHeight(player: MediaPlayer): Int? {
-            return try {
-                player.videoHeight
-            } catch (_: IllegalStateException) {
-                null
-            }
+        private fun safeVideoHeight(player: MediaPlayer): Int? = try {
+            player.videoHeight
+        } catch (_: IllegalStateException) {
+            null
         }
 
-        private fun safeVideoFramesPlayed(player: MediaPlayer): Int? {
-            return try {
-                player.metrics
-                    .getInt(MediaPlayer.MetricsConstants.FRAMES, -1)
-                    .takeIf { it >= 0 }
-            } catch (_: IllegalStateException) {
-                null
-            }
+        private fun safeVideoFramesPlayed(player: MediaPlayer): Int? = try {
+            player.metrics
+                .getInt(MediaPlayer.MetricsConstants.FRAMES, -1)
+                .takeIf { it >= 0 }
+        } catch (_: IllegalStateException) {
+            null
         }
 
-        private fun safeVideoFramesDropped(player: MediaPlayer): Int? {
-            return try {
-                player.metrics
-                    .getInt(MediaPlayer.MetricsConstants.FRAMES_DROPPED, -1)
-                    .takeIf { it >= 0 }
-            } catch (_: IllegalStateException) {
-                null
-            }
+        private fun safeVideoFramesDropped(player: MediaPlayer): Int? = try {
+            player.metrics
+                .getInt(MediaPlayer.MetricsConstants.FRAMES_DROPPED, -1)
+                .takeIf { it >= 0 }
+        } catch (_: IllegalStateException) {
+            null
         }
 
-        private fun mediaInfoName(what: Int): String {
-            return when (what) {
-                MediaPlayer.MEDIA_INFO_UNKNOWN -> "MEDIA_INFO_UNKNOWN"
-                MediaPlayer.MEDIA_INFO_STARTED_AS_NEXT -> "MEDIA_INFO_STARTED_AS_NEXT"
-                MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START -> "MEDIA_INFO_VIDEO_RENDERING_START"
-                MediaPlayer.MEDIA_INFO_VIDEO_TRACK_LAGGING -> "MEDIA_INFO_VIDEO_TRACK_LAGGING"
-                MediaPlayer.MEDIA_INFO_BUFFERING_START -> "MEDIA_INFO_BUFFERING_START"
-                MediaPlayer.MEDIA_INFO_BUFFERING_END -> "MEDIA_INFO_BUFFERING_END"
-                MediaPlayer.MEDIA_INFO_BAD_INTERLEAVING -> "MEDIA_INFO_BAD_INTERLEAVING"
-                MediaPlayer.MEDIA_INFO_NOT_SEEKABLE -> "MEDIA_INFO_NOT_SEEKABLE"
-                MediaPlayer.MEDIA_INFO_METADATA_UPDATE -> "MEDIA_INFO_METADATA_UPDATE"
-                MediaPlayer.MEDIA_INFO_AUDIO_NOT_PLAYING -> "MEDIA_INFO_AUDIO_NOT_PLAYING"
-                MediaPlayer.MEDIA_INFO_VIDEO_NOT_PLAYING -> "MEDIA_INFO_VIDEO_NOT_PLAYING"
-                MediaPlayer.MEDIA_INFO_UNSUPPORTED_SUBTITLE -> "MEDIA_INFO_UNSUPPORTED_SUBTITLE"
-                MediaPlayer.MEDIA_INFO_SUBTITLE_TIMED_OUT -> "MEDIA_INFO_SUBTITLE_TIMED_OUT"
-                else -> "UNKNOWN_INFO"
-            }
+        private fun mediaInfoName(what: Int): String = when (what) {
+            MediaPlayer.MEDIA_INFO_UNKNOWN -> "MEDIA_INFO_UNKNOWN"
+            MediaPlayer.MEDIA_INFO_STARTED_AS_NEXT -> "MEDIA_INFO_STARTED_AS_NEXT"
+            MediaPlayer.MEDIA_INFO_VIDEO_RENDERING_START -> "MEDIA_INFO_VIDEO_RENDERING_START"
+            MediaPlayer.MEDIA_INFO_VIDEO_TRACK_LAGGING -> "MEDIA_INFO_VIDEO_TRACK_LAGGING"
+            MediaPlayer.MEDIA_INFO_BUFFERING_START -> "MEDIA_INFO_BUFFERING_START"
+            MediaPlayer.MEDIA_INFO_BUFFERING_END -> "MEDIA_INFO_BUFFERING_END"
+            MediaPlayer.MEDIA_INFO_BAD_INTERLEAVING -> "MEDIA_INFO_BAD_INTERLEAVING"
+            MediaPlayer.MEDIA_INFO_NOT_SEEKABLE -> "MEDIA_INFO_NOT_SEEKABLE"
+            MediaPlayer.MEDIA_INFO_METADATA_UPDATE -> "MEDIA_INFO_METADATA_UPDATE"
+            MediaPlayer.MEDIA_INFO_AUDIO_NOT_PLAYING -> "MEDIA_INFO_AUDIO_NOT_PLAYING"
+            MediaPlayer.MEDIA_INFO_VIDEO_NOT_PLAYING -> "MEDIA_INFO_VIDEO_NOT_PLAYING"
+            MediaPlayer.MEDIA_INFO_UNSUPPORTED_SUBTITLE -> "MEDIA_INFO_UNSUPPORTED_SUBTITLE"
+            MediaPlayer.MEDIA_INFO_SUBTITLE_TIMED_OUT -> "MEDIA_INFO_SUBTITLE_TIMED_OUT"
+            else -> "UNKNOWN_INFO"
         }
 
-        private fun mediaErrorName(code: Int): String {
-            return when (code) {
-                MediaPlayer.MEDIA_ERROR_UNKNOWN -> "MEDIA_ERROR_UNKNOWN"
-                MediaPlayer.MEDIA_ERROR_SERVER_DIED -> "MEDIA_ERROR_SERVER_DIED"
-                MediaPlayer.MEDIA_ERROR_IO -> "MEDIA_ERROR_IO"
-                MediaPlayer.MEDIA_ERROR_MALFORMED -> "MEDIA_ERROR_MALFORMED"
-                MediaPlayer.MEDIA_ERROR_UNSUPPORTED -> "MEDIA_ERROR_UNSUPPORTED"
-                MediaPlayer.MEDIA_ERROR_TIMED_OUT -> "MEDIA_ERROR_TIMED_OUT"
-                else -> "UNKNOWN_ERROR"
-            }
+        private fun mediaErrorName(code: Int): String = when (code) {
+            MediaPlayer.MEDIA_ERROR_UNKNOWN -> "MEDIA_ERROR_UNKNOWN"
+            MediaPlayer.MEDIA_ERROR_SERVER_DIED -> "MEDIA_ERROR_SERVER_DIED"
+            MediaPlayer.MEDIA_ERROR_IO -> "MEDIA_ERROR_IO"
+            MediaPlayer.MEDIA_ERROR_MALFORMED -> "MEDIA_ERROR_MALFORMED"
+            MediaPlayer.MEDIA_ERROR_UNSUPPORTED -> "MEDIA_ERROR_UNSUPPORTED"
+            MediaPlayer.MEDIA_ERROR_TIMED_OUT -> "MEDIA_ERROR_TIMED_OUT"
+            else -> "UNKNOWN_ERROR"
         }
     }
 

@@ -56,9 +56,8 @@ internal object UpdateCheckPreferences {
             .apply()
     }
 
-    fun getLastNotifiedVersion(context: Context): String? {
-        return preferences(context).getString(KEY_LAST_NOTIFIED_VERSION, null)
-    }
+    fun getLastNotifiedVersion(context: Context): String? =
+        preferences(context).getString(KEY_LAST_NOTIFIED_VERSION, null)
 
     fun setLastNotifiedVersion(context: Context, version: String) {
         preferences(context).edit()

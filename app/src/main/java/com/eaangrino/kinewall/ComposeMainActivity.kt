@@ -125,11 +125,14 @@ class ComposeMainActivity : ComponentActivity() {
             false
         )
         val launchedFromAppList = intent.action == Intent.ACTION_MAIN &&
-                intent.hasCategory(Intent.CATEGORY_LAUNCHER)
+            intent.hasCategory(Intent.CATEGORY_LAUNCHER)
 
-        return requestedUpdateCheck || requestedUpdateInstall ||
-                (launchedFromAppList &&
-                        (savedInstanceState == null || !releaseCheckCompleted))
+        return requestedUpdateCheck ||
+            requestedUpdateInstall ||
+            (
+                launchedFromAppList &&
+                    (savedInstanceState == null || !releaseCheckCompleted)
+                )
     }
 
     private fun checkForUpdates() {
@@ -827,11 +830,17 @@ class ComposeMainActivity : ComponentActivity() {
                 ) {
                     Column(Modifier.weight(1f)) {
                         Text(
-                            text = stringResource(R.string.installed_version, BuildConfig.VERSION_NAME),
+                            text = stringResource(
+                                R.string.installed_version,
+                                BuildConfig.VERSION_NAME
+                            ),
                             style = MaterialTheme.typography.bodyLarge
                         )
                         Text(
-                            text = stringResource(R.string.github_release_version, releaseVersionText),
+                            text = stringResource(
+                                R.string.github_release_version,
+                                releaseVersionText
+                            ),
                             style = MaterialTheme.typography.bodyLarge,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                             modifier = Modifier.padding(top = 8.dp)
@@ -938,9 +947,8 @@ class ComposeMainActivity : ComponentActivity() {
             ?: getString(R.string.selected_video_fallback)
     }
 
-    private fun uriDescription(uri: Uri): String {
-        return "scheme=${uri.scheme ?: "unknown"}, authority=${uri.authority ?: "unknown"}"
-    }
+    private fun uriDescription(uri: Uri): String =
+        "scheme=${uri.scheme ?: "unknown"}, authority=${uri.authority ?: "unknown"}"
 
     private enum class MainDestination {
         WALLPAPER,
