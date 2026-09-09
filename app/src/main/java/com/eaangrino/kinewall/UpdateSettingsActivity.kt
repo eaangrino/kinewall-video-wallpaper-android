@@ -454,6 +454,11 @@ class UpdateSettingsActivity : ComponentActivity() {
             Box {
                 OutlinedButton(onClick = { expanded = true }) {
                     Text(dayOfWeekLabel(selectedDay))
+                    Spacer(Modifier.width(6.dp))
+                    Icon(
+                        painter = painterResource(R.drawable.ic_expand_more_24),
+                        contentDescription = null
+                    )
                 }
                 DropdownMenu(
                     expanded = expanded,
