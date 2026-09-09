@@ -38,6 +38,52 @@ class UpdateCheckerTest {
     }
 
     @Test
+    fun debugMatchingIsCaseInsensitive() {
+        val result = UpdateChecker.selectProductionApk(
+            listOf(
+                ReleaseAsset(
+                    name = "kinewall-0.6.0-DEBUG.APK",
+                    downloadUrl = "https://example.test/kinewall-0.6.0-DEBUG.APK"
+                )
+            )
+        )
+
+        assertNull(result)
+    }
+
+    @Test
+    fun uppercaseApkExtensionIsAccepted() {
+        val result = UpdateChecker.selectProductionApk(
+            listOf(
+                ReleaseAsset(
+                    name = "kinewall-0.6.0.APK",
+                    downloadUrl = "https://example.test/kinewall-0.6.0.APK"
+                )
+            )
+        )
+
+        assertEquals("https://example.test/kinewall-0.6.0.APK", result)
+    }
+
+    @Test
+    fun nonApkAssetsAreIgnored() {
+        val result = UpdateChecker.selectProductionApk(
+            listOf(
+                ReleaseAsset(
+                    name = "checksums.txt",
+                    downloadUrl = "https://example.test/checksums.txt"
+                ),
+                ReleaseAsset(
+                    name = "kinewall-0.6.0.zip",
+                    downloadUrl = "https://example.test/kinewall-0.6.0.zip"
+                )
+            )
+        )
+
+        assertNull(result)
+    }
+
+    @Test
     fun nonHttpsApkIsRejected() {
         val result = UpdateChecker.selectProductionApk(
             listOf(ReleaseAsset("kinewall-0.6.0.apk", "http://example.test/kinewall.apk"))

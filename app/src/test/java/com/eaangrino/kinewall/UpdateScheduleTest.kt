@@ -43,6 +43,23 @@ class UpdateScheduleTest {
     }
 
     @Test
+    fun `daily at exact selected time schedules next day`() {
+        val now = ZonedDateTime.of(2026, 9, 8, 14, 0, 0, 0, zone)
+        val schedule = UpdateScheduleSettings(
+            frequency = UpdateCheckFrequency.DAILY,
+            hour = 14,
+            minute = 0,
+            weeklyDay = DayOfWeek.MONDAY
+        )
+
+        val next = UpdateScheduleCalculator.nextCheckAt(now, schedule)
+
+        assertEquals(9, next.dayOfMonth)
+        assertEquals(14, next.hour)
+        assertEquals(0, next.minute)
+    }
+
+    @Test
     fun `weekly uses selected weekday and time`() {
         val now = ZonedDateTime.of(2026, 9, 8, 10, 0, 0, 0, zone)
         val schedule = UpdateScheduleSettings(
@@ -73,6 +90,22 @@ class UpdateScheduleTest {
         val next = UpdateScheduleCalculator.nextCheckAt(now, schedule)
 
         assertEquals(18, next.dayOfMonth)
+    }
+
+    @Test
+    fun `weekly at exact selected time schedules following week`() {
+        val now = ZonedDateTime.of(2026, 9, 11, 18, 30, 0, 0, zone)
+        val schedule = UpdateScheduleSettings(
+            frequency = UpdateCheckFrequency.WEEKLY,
+            hour = 18,
+            minute = 30,
+            weeklyDay = DayOfWeek.FRIDAY
+        )
+
+        val next = UpdateScheduleCalculator.nextCheckAt(now, schedule)
+
+        assertEquals(18, next.dayOfMonth)
+        assertEquals(DayOfWeek.FRIDAY, next.dayOfWeek)
     }
 
     @Test
@@ -124,7 +157,49 @@ class UpdateScheduleTest {
     }
 
     @Test
+    fun `monthly at exact last day time schedules next month`() {
+        val now = ZonedDateTime.of(2026, 9, 30, 21, 15, 0, 0, zone)
+        val schedule = UpdateScheduleSettings(
+            frequency = UpdateCheckFrequency.MONTHLY,
+            hour = 21,
+            minute = 15,
+            weeklyDay = DayOfWeek.MONDAY
+        )
+
+        val next = UpdateScheduleCalculator.nextCheckAt(now, schedule)
+
+        assertEquals(10, next.monthValue)
+        assertEquals(31, next.dayOfMonth)
+        assertEquals(21, next.hour)
+        assertEquals(15, next.minute)
+    }
+
+    @Test
+    fun `out of range time values are clamped`() {
+        val now = ZonedDateTime.of(2026, 9, 8, 10, 0, 0, 0, zone)
+        val schedule = UpdateScheduleSettings(
+            frequency = UpdateCheckFrequency.DAILY,
+            hour = 99,
+            minute = -10,
+            weeklyDay = DayOfWeek.MONDAY
+        )
+
+        val next = UpdateScheduleCalculator.nextCheckAt(now, schedule)
+
+        assertEquals(23, next.hour)
+        assertEquals(0, next.minute)
+    }
+
+    @Test
     fun `invalid stored frequency falls back to daily`() {
         assertEquals(UpdateCheckFrequency.DAILY, UpdateCheckFrequency.fromStoredValue("OTHER"))
+        assertEquals(UpdateCheckFrequency.DAILY, UpdateCheckFrequency.fromStoredValue(null))
+    }
+
+    @Test
+    fun `valid stored frequency is restored`() {
+        assertEquals(UpdateCheckFrequency.DAILY, UpdateCheckFrequency.fromStoredValue("DAILY"))
+        assertEquals(UpdateCheckFrequency.WEEKLY, UpdateCheckFrequency.fromStoredValue("WEEKLY"))
+        assertEquals(UpdateCheckFrequency.MONTHLY, UpdateCheckFrequency.fromStoredValue("MONTHLY"))
     }
 }

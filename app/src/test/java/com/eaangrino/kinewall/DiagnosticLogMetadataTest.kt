@@ -1,6 +1,8 @@
 package com.eaangrino.kinewall
 
+import java.time.format.DateTimeParseException
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertThrows
 import org.junit.Test
 
 class DiagnosticLogMetadataTest {
@@ -10,6 +12,21 @@ class DiagnosticLogMetadataTest {
             "Sep 5, 2026",
             diagnosticLogDateLabel("kinewall-diagnostics-2026-09-05.log")
         )
+    }
+
+    @Test
+    fun leapDayLogDateIsFormattedForDisplay() {
+        assertEquals(
+            "Feb 29, 2028",
+            diagnosticLogDateLabel("kinewall-diagnostics-2028-02-29.log")
+        )
+    }
+
+    @Test
+    fun invalidLogFileNameIsRejected() {
+        assertThrows(DateTimeParseException::class.java) {
+            diagnosticLogDateLabel("not-a-diagnostic-log.log")
+        }
     }
 
     @Test
