@@ -10,17 +10,17 @@ class UpdateCheckerTest {
         val result = UpdateChecker.selectProductionApk(
             listOf(
                 ReleaseAsset(
-                    name = "kinewall-0.6.0-debug.apk",
-                    downloadUrl = "https://example.test/kinewall-0.6.0-debug.apk"
+                    name = "kinewall-0.7.0-debug.apk",
+                    downloadUrl = "https://example.test/kinewall-0.7.0-debug.apk"
                 ),
                 ReleaseAsset(
-                    name = "kinewall-0.6.0.apk",
-                    downloadUrl = "https://example.test/kinewall-0.6.0.apk"
+                    name = "kinewall-0.7.0.apk",
+                    downloadUrl = "https://example.test/kinewall-0.7.0.apk"
                 )
             )
         )
 
-        assertEquals("https://example.test/kinewall-0.6.0.apk", result)
+        assertEquals("https://example.test/kinewall-0.7.0.apk", result)
     }
 
     @Test
@@ -28,8 +28,8 @@ class UpdateCheckerTest {
         val result = UpdateChecker.selectProductionApk(
             listOf(
                 ReleaseAsset(
-                    name = "kinewall-0.6.0-debug.apk",
-                    downloadUrl = "https://example.test/kinewall-0.6.0-debug.apk"
+                    name = "kinewall-0.7.0-debug.apk",
+                    downloadUrl = "https://example.test/kinewall-0.7.0-debug.apk"
                 )
             )
         )
@@ -42,8 +42,8 @@ class UpdateCheckerTest {
         val result = UpdateChecker.selectProductionApk(
             listOf(
                 ReleaseAsset(
-                    name = "kinewall-0.6.0-DEBUG.APK",
-                    downloadUrl = "https://example.test/kinewall-0.6.0-DEBUG.APK"
+                    name = "kinewall-0.7.0-DEBUG.APK",
+                    downloadUrl = "https://example.test/kinewall-0.7.0-DEBUG.APK"
                 )
             )
         )
@@ -56,13 +56,13 @@ class UpdateCheckerTest {
         val result = UpdateChecker.selectProductionApk(
             listOf(
                 ReleaseAsset(
-                    name = "kinewall-0.6.0.APK",
-                    downloadUrl = "https://example.test/kinewall-0.6.0.APK"
+                    name = "kinewall-0.7.0.APK",
+                    downloadUrl = "https://example.test/kinewall-0.7.0.APK"
                 )
             )
         )
 
-        assertEquals("https://example.test/kinewall-0.6.0.APK", result)
+        assertEquals("https://example.test/kinewall-0.7.0.APK", result)
     }
 
     @Test
@@ -74,8 +74,8 @@ class UpdateCheckerTest {
                     downloadUrl = "https://example.test/checksums.txt"
                 ),
                 ReleaseAsset(
-                    name = "kinewall-0.6.0.zip",
-                    downloadUrl = "https://example.test/kinewall-0.6.0.zip"
+                    name = "kinewall-0.7.0.zip",
+                    downloadUrl = "https://example.test/kinewall-0.7.0.zip"
                 )
             )
         )
@@ -86,7 +86,7 @@ class UpdateCheckerTest {
     @Test
     fun nonHttpsApkIsRejected() {
         val result = UpdateChecker.selectProductionApk(
-            listOf(ReleaseAsset("kinewall-0.6.0.apk", "http://example.test/kinewall.apk"))
+            listOf(ReleaseAsset("kinewall-0.7.0.apk", "http://example.test/kinewall.apk"))
         )
 
         assertNull(result)
