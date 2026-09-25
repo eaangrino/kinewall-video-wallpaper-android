@@ -89,7 +89,6 @@ object DiagnosticLogger {
                     ?: error("Unable to create diagnostics directory")
                 val logFile = File(logDirectory, logFileName(now))
                 val shouldWriteHeader = logFile.length() == 0L
-                val datePart = SimpleDateFormat(LOG_DATE_PATTERN, Locale.US).format(now)
                 val timestamp = SimpleDateFormat(
                     "yyyy-MM-dd'T'HH:mm:ss.SSSXXX",
                     Locale.US
@@ -97,16 +96,7 @@ object DiagnosticLogger {
 
                 FileOutputStream(logFile, true).bufferedWriter().use { writer ->
                     if (shouldWriteHeader) {
-                        writer.append(
-                            diagnosticLogHeader(
-                                date = datePart,
-                                manufacturer = Build.MANUFACTURER,
-                                model = Build.MODEL,
-                                device = Build.DEVICE,
-                                sdkInt = Build.VERSION.SDK_INT,
-                                appVersion = BuildConfig.VERSION_NAME
-                            )
-                        )
+                        writer.append(currentDiagnosticLogHeader(now))
                         writer.newLine()
                         writer.newLine()
                     }
@@ -133,6 +123,32 @@ object DiagnosticLogger {
                 }
             } catch (error: Exception) {
                 Log.e(TAG, "Failed to write diagnostic log", error)
+            }
+        }
+    }
+
+    fun appendVersionHeader(context: Context) {
+        if (!DiagnosticSettings.isLoggingEnabled(context)) {
+            return
+        }
+
+        val applicationContext = context.applicationContext
+
+        executor.execute {
+            try {
+                val now = Date()
+                val logDirectory = getLogDirectory(applicationContext, createIfMissing = true)
+                    ?: error("Unable to create diagnostics directory")
+                val logFile = File(logDirectory, logFileName(now))
+
+                FileOutputStream(logFile, true).bufferedWriter().use { writer ->
+                    writer.newLine()
+                    writer.append(currentDiagnosticLogHeader(now))
+                    writer.newLine()
+                    writer.newLine()
+                }
+            } catch (error: Exception) {
+                Log.e(TAG, "Failed to write diagnostic version header", error)
             }
         }
     }
@@ -203,11 +219,25 @@ object DiagnosticLogger {
     }
 
     fun deleteLog(context: Context, fileName: String) {
+        deleteLogs(context, listOf(fileName))
+    }
+
+    fun deleteLogs(context: Context, fileNames: Collection<String>) {
+        val names = fileNames.distinct()
+        require(names.isNotEmpty()) {
+            "At least one diagnostic log is required"
+        }
+
         val applicationContext = context.applicationContext
         val deleteTask = executor.submit {
-            val file = requireLogFile(applicationContext, fileName)
-            check(file.delete()) {
-                "Unable to delete diagnostic log"
+            val files = names.map { fileName ->
+                requireLogFile(applicationContext, fileName)
+            }
+
+            files.forEach { file ->
+                check(file.delete()) {
+                    "Unable to delete diagnostic log ${file.name}"
+                }
             }
         }
 
@@ -215,6 +245,18 @@ object DiagnosticLogger {
     }
 
     fun isTodayLog(fileName: String): Boolean = fileName == logFileName(Date())
+
+    private fun currentDiagnosticLogHeader(now: Date): String {
+        val datePart = SimpleDateFormat(LOG_DATE_PATTERN, Locale.US).format(now)
+        return diagnosticLogHeader(
+            date = datePart,
+            manufacturer = Build.MANUFACTURER,
+            model = Build.MODEL,
+            device = Build.DEVICE,
+            sdkInt = Build.VERSION.SDK_INT,
+            appVersion = BuildConfig.VERSION_NAME
+        )
+    }
 
     internal fun diagnosticLogHeader(
         date: String,

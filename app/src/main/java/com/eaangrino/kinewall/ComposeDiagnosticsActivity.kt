@@ -10,7 +10,8 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -27,6 +28,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -134,13 +136,14 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         }
         var logs by remember { mutableStateOf(loadLogs()) }
         var logContent by remember { mutableStateOf("") }
-        var deleteCandidate by remember { mutableStateOf<String?>(null) }
+        var selectedLogNames by remember { mutableStateOf(setOf<String>()) }
+        var deleteCandidates by remember { mutableStateOf(emptySet<String>()) }
 
         BackHandler {
-            if (selectedLogName != null) {
-                selectedLogName = null
-            } else {
-                finish()
+            when {
+                selectedLogName != null -> selectedLogName = null
+                selectedLogNames.isNotEmpty() -> selectedLogNames = emptySet()
+                else -> finish()
             }
         }
 
@@ -199,13 +202,16 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                     title = {
                         Column {
                             Text(
-                                text = stringResource(
-                                    if (selectedLogName == null) {
-                                        R.string.diagnostic_logs_title
-                                    } else {
+                                text = when {
+                                    selectedLogName != null -> stringResource(
                                         R.string.diagnostic_log_title
-                                    }
-                                )
+                                    )
+                                    selectedLogNames.isNotEmpty() -> stringResource(
+                                        R.string.diagnostic_logs_selected,
+                                        selectedLogNames.size
+                                    )
+                                    else -> stringResource(R.string.diagnostic_logs_title)
+                                }
                             )
                             selectedLogName?.let { fileName ->
                                 Text(
@@ -221,10 +227,10 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                     navigationIcon = {
                         IconButton(
                             onClick = {
-                                if (selectedLogName != null) {
-                                    selectedLogName = null
-                                } else {
-                                    finish()
+                                when {
+                                    selectedLogName != null -> selectedLogName = null
+                                    selectedLogNames.isNotEmpty() -> selectedLogNames = emptySet()
+                                    else -> finish()
                                 }
                             }
                         ) {
@@ -235,11 +241,42 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                         }
                     },
                     actions = {
-                        selectedLogName?.let { fileName ->
-                            ViewerActions(
-                                fileName = fileName,
-                                onDelete = { deleteCandidate = fileName }
-                            )
+                        val viewedLogName = selectedLogName
+                        when {
+                            viewedLogName != null -> {
+                                ViewerActions(
+                                    fileName = viewedLogName,
+                                    onDelete = { deleteCandidates = setOf(viewedLogName) }
+                                )
+                            }
+                            selectedLogNames.isNotEmpty() -> {
+                                val allSelected = logs.isNotEmpty() &&
+                                    selectedLogNames.size == logs.size
+                                TextButton(
+                                    onClick = {
+                                        selectedLogNames = if (allSelected) {
+                                            emptySet()
+                                        } else {
+                                            logs.map { it.name }.toSet()
+                                        }
+                                    }
+                                ) {
+                                    Text(
+                                        stringResource(
+                                            if (allSelected) {
+                                                R.string.clear_log_selection
+                                            } else {
+                                                R.string.select_all_logs
+                                            }
+                                        )
+                                    )
+                                }
+                                TextButton(
+                                    onClick = { deleteCandidates = selectedLogNames }
+                                ) {
+                                    Text(stringResource(R.string.delete))
+                                }
+                            }
                         }
                     }
                 )
@@ -248,6 +285,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
             if (selectedLogName == null) {
                 LogList(
                     logs = logs,
+                    selectedLogNames = selectedLogNames,
                     loggingEnabled = loggingEnabled,
                     contentPaddingTop = contentPadding.calculateTopPadding(),
                     onLoggingEnabledChange = { enabled ->
@@ -263,9 +301,19 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                         logs = loadLogs()
                     },
                     onView = { selectedLogName = it },
+                    onSelectionStart = { fileName ->
+                        selectedLogNames = selectedLogNames + fileName
+                    },
+                    onSelectionToggle = { fileName ->
+                        selectedLogNames = if (fileName in selectedLogNames) {
+                            selectedLogNames - fileName
+                        } else {
+                            selectedLogNames + fileName
+                        }
+                    },
                     onDownload = ::downloadLog,
                     onShare = ::shareLog,
-                    onDelete = { deleteCandidate = it }
+                    onDelete = { deleteCandidates = setOf(it) }
                 )
             } else {
                 LogViewer(
@@ -275,34 +323,54 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
             }
         }
 
-        deleteCandidate?.let { fileName ->
+        deleteCandidates.takeIf { it.isNotEmpty() }?.let { fileNames ->
+            val singleFileName = fileNames.singleOrNull()
             AlertDialog(
-                onDismissRequest = { deleteCandidate = null },
-                title = { Text(stringResource(R.string.delete_diagnostic_log_title)) },
-                text = {
+                onDismissRequest = { deleteCandidates = emptySet() },
+                title = {
                     Text(
                         stringResource(
-                            R.string.delete_diagnostic_log_message,
-                            fileName
+                            if (singleFileName != null) {
+                                R.string.delete_diagnostic_log_title
+                            } else {
+                                R.string.delete_diagnostic_logs_title
+                            }
                         )
                     )
                 },
+                text = {
+                    Text(
+                        if (singleFileName != null) {
+                            stringResource(
+                                R.string.delete_diagnostic_log_message,
+                                singleFileName
+                            )
+                        } else {
+                            stringResource(
+                                R.string.delete_diagnostic_logs_message,
+                                fileNames.size
+                            )
+                        }
+                    )
+                },
                 dismissButton = {
-                    TextButton(onClick = { deleteCandidate = null }) {
+                    TextButton(onClick = { deleteCandidates = emptySet() }) {
                         Text(stringResource(android.R.string.cancel))
                     }
                 },
                 confirmButton = {
                     TextButton(
                         onClick = {
-                            deleteCandidate = null
-                            if (deleteLog(fileName)) {
-                                if (selectedLogName == fileName) {
-                                    selectedLogName = null
-                                } else {
-                                    logs = loadLogs()
+                            deleteCandidates = emptySet()
+                            if (deleteLogs(fileNames)) {
+                                selectedLogName?.let { fileName ->
+                                    if (fileName in fileNames) {
+                                        selectedLogName = null
+                                    }
                                 }
+                                selectedLogNames = emptySet()
                             }
+                            logs = loadLogs()
                         }
                     ) {
                         Text(stringResource(R.string.delete))
@@ -312,13 +380,17 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         }
     }
 
+    @OptIn(ExperimentalFoundationApi::class)
     @Composable
     private fun LogList(
         logs: List<DiagnosticLogger.DiagnosticLogFile>,
+        selectedLogNames: Set<String>,
         loggingEnabled: Boolean,
         contentPaddingTop: androidx.compose.ui.unit.Dp,
         onLoggingEnabledChange: (Boolean) -> Unit,
         onView: (String) -> Unit,
+        onSelectionStart: (String) -> Unit,
+        onSelectionToggle: (String) -> Unit,
         onDownload: (String) -> Unit,
         onShare: (String) -> Unit,
         onDelete: (String) -> Unit
@@ -406,7 +478,11 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                         ) { log ->
                             LogRow(
                                 log = log,
+                                selectionActive = selectedLogNames.isNotEmpty(),
+                                isSelected = log.name in selectedLogNames,
                                 onView = { onView(log.name) },
+                                onSelectionStart = { onSelectionStart(log.name) },
+                                onSelectionToggle = { onSelectionToggle(log.name) },
                                 onDownload = { onDownload(log.name) },
                                 onShare = { onShare(log.name) },
                                 onDelete = { onDelete(log.name) }
@@ -421,7 +497,11 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
     @Composable
     private fun LogRow(
         log: DiagnosticLogger.DiagnosticLogFile,
+        selectionActive: Boolean,
+        isSelected: Boolean,
         onView: () -> Unit,
+        onSelectionStart: () -> Unit,
+        onSelectionToggle: () -> Unit,
         onDownload: () -> Unit,
         onShare: () -> Unit,
         onDelete: () -> Unit
@@ -431,7 +511,16 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         OutlinedCard(
             modifier = Modifier
                 .fillMaxWidth()
-                .clickable(onClick = onView)
+                .combinedClickable(
+                    onClick = {
+                        if (selectionActive) {
+                            onSelectionToggle()
+                        } else {
+                            onView()
+                        }
+                    },
+                    onLongClick = onSelectionStart
+                )
         ) {
             Row(
                 verticalAlignment = Alignment.CenterVertically,
@@ -459,38 +548,45 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                         modifier = Modifier.padding(top = 4.dp)
                     )
                 }
-                Box {
-                    IconButton(onClick = { menuExpanded = true }) {
-                        Icon(
-                            painterResource(R.drawable.ic_more_vert_24),
-                            contentDescription = stringResource(
-                                R.string.diagnostic_log_actions_for,
-                                log.name
+                if (selectionActive) {
+                    Checkbox(
+                        checked = isSelected,
+                        onCheckedChange = { onSelectionToggle() }
+                    )
+                } else {
+                    Box {
+                        IconButton(onClick = { menuExpanded = true }) {
+                            Icon(
+                                painterResource(R.drawable.ic_more_vert_24),
+                                contentDescription = stringResource(
+                                    R.string.diagnostic_log_actions_for,
+                                    log.name
+                                )
                             )
-                        )
-                    }
-                    DropdownMenu(
-                        expanded = menuExpanded,
-                        onDismissRequest = { menuExpanded = false }
-                    ) {
-                        LogActionItems(
-                            onDownload = {
-                                menuExpanded = false
-                                onDownload()
-                            },
-                            onShare = {
-                                menuExpanded = false
-                                onShare()
-                            },
-                            onView = {
-                                menuExpanded = false
-                                onView()
-                            },
-                            onDelete = {
-                                menuExpanded = false
-                                onDelete()
-                            }
-                        )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = { menuExpanded = false }
+                        ) {
+                            LogActionItems(
+                                onDownload = {
+                                    menuExpanded = false
+                                    onDownload()
+                                },
+                                onShare = {
+                                    menuExpanded = false
+                                    onShare()
+                                },
+                                onView = {
+                                    menuExpanded = false
+                                    onView()
+                                },
+                                onDelete = {
+                                    menuExpanded = false
+                                    onDelete()
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -661,16 +757,25 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         }
     }
 
-    private fun deleteLog(fileName: String): Boolean = try {
+    private fun deleteLogs(fileNames: Set<String>): Boolean = try {
+        val singleFileName = fileNames.singleOrNull()
         DiagnosticLogger.log(
             this,
-            "DIAGNOSTIC_LOG_DELETE_REQUESTED",
-            "file=$fileName"
+            if (singleFileName != null) {
+                "DIAGNOSTIC_LOG_DELETE_REQUESTED"
+            } else {
+                "DIAGNOSTIC_LOGS_DELETE_REQUESTED"
+            },
+            singleFileName?.let { "file=$it" } ?: "count=${fileNames.size}"
         )
-        DiagnosticLogger.deleteLog(this, fileName)
+        DiagnosticLogger.deleteLogs(this, fileNames)
         Toast.makeText(
             this,
-            R.string.diagnostic_log_deleted,
+            if (singleFileName != null) {
+                getString(R.string.diagnostic_log_deleted)
+            } else {
+                getString(R.string.diagnostic_logs_deleted, fileNames.size)
+            },
             Toast.LENGTH_SHORT
         ).show()
         true
@@ -678,7 +783,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         DiagnosticLogger.log(
             this,
             "DIAGNOSTIC_LOG_DELETE_FAILED",
-            "file=$fileName",
+            "count=${fileNames.size}",
             error
         )
         Toast.makeText(
