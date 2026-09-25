@@ -1,5 +1,6 @@
 package com.eaangrino.kinewall
 
+import android.media.MediaMetadataRetriever
 import android.net.Uri
 import android.util.Size
 import androidx.compose.foundation.Image
@@ -352,12 +353,26 @@ private fun VideoThumbnail(uriString: String) {
     val context = LocalContext.current
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, uriString) {
         value = withContext(Dispatchers.IO) {
+            val uri = Uri.parse(uriString)
             runCatching {
                 context.contentResolver.loadThumbnail(
-                    Uri.parse(uriString),
+                    uri,
                     Size(640, 360),
                     null
                 )
+            }.getOrNull() ?: runCatching {
+                val retriever = MediaMetadataRetriever()
+                try {
+                    retriever.setDataSource(context, uri)
+                    retriever.getScaledFrameAtTime(
+                        -1L,
+                        MediaMetadataRetriever.OPTION_CLOSEST_SYNC,
+                        640,
+                        360
+                    )
+                } finally {
+                    retriever.release()
+                }
             }.getOrNull()
         }
     }

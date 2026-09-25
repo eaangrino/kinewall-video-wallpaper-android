@@ -92,6 +92,31 @@ class WallpaperRuntimeStore(context: Context) {
         }.apply()
     }
 
+    fun migrateVideoUris(transform: (String) -> String) {
+        val editor = preferences.edit()
+        var changed = false
+
+        WallpaperRuntimeRole.entries.forEach { role ->
+            val key = "${role.prefix}video_uri"
+            val current = preferences.getString(key, null) ?: return@forEach
+            val migrated = transform(current)
+            if (migrated != current) {
+                editor.putString(key, migrated)
+                changed = true
+            }
+        }
+
+        preferences.getString(LEGACY_VIDEO_URI, null)?.let { current ->
+            val migrated = transform(current)
+            if (migrated != current) {
+                editor.putString(LEGACY_VIDEO_URI, migrated)
+                changed = true
+            }
+        }
+
+        if (changed) editor.apply()
+    }
+
     fun clearPreview() {
         clear(WallpaperRuntimeRole.PREVIEW)
     }
