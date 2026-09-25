@@ -865,12 +865,13 @@ class ComposeMainActivity : ComponentActivity() {
         // Keep the existing clear-before-preview workaround until it is proven safe to remove
         // across the OEMs where KineWall has already been tested.
         resetCurrentKineWallWallpaper()
-        WallpaperRuntimeStore(this).stagePreview(wallpaper)
+        val runtimeSnapshot = WallpaperRuntimeStore(this).stagePreview(wallpaper)
 
         DiagnosticLogger.log(
             this,
             "OPEN_LIVE_WALLPAPER_PICKER",
-            "wallpaperId=${wallpaper.id}, generation=${wallpaper.optimizedGeneration}"
+            "wallpaperId=${wallpaper.id}, optimizedGeneration=${wallpaper.optimizedGeneration}, " +
+                "runtimeGeneration=${runtimeSnapshot.generation}"
         )
         startActivity(
             Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {

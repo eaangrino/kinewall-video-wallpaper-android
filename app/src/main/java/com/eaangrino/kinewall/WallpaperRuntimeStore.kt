@@ -20,19 +20,7 @@ class WallpaperRuntimeStore(context: Context) {
     private val preferences = context.getSharedPreferences(PREFERENCES_NAME, Context.MODE_PRIVATE)
 
     fun read(role: WallpaperRuntimeRole): WallpaperRuntimeSnapshot? {
-        val prefix = role.prefix
-        val uri = preferences.getString("${prefix}video_uri", null)
-        if (uri != null) {
-            return WallpaperRuntimeSnapshot(
-                wallpaperId = preferences.getString("${prefix}wallpaper_id", null),
-                videoUri = uri,
-                scaleMode = preferences.getString("${prefix}scale_mode", WallpaperScaleMode.CROP)
-                    ?: WallpaperScaleMode.CROP,
-                cropX = preferences.getFloat("${prefix}crop_x", 0f),
-                cropY = preferences.getFloat("${prefix}crop_y", 0f),
-                generation = preferences.getLong("${prefix}generation", 0L)
-            )
-        }
+        readExact(role)?.let { return it }
 
         if (role == WallpaperRuntimeRole.PREVIEW) {
             return read(WallpaperRuntimeRole.ACTIVE)
@@ -50,7 +38,21 @@ class WallpaperRuntimeStore(context: Context) {
         )
     }
 
-    fun stagePreview(wallpaper: WallpaperEntity) {
+    fun readExact(role: WallpaperRuntimeRole): WallpaperRuntimeSnapshot? {
+        val prefix = role.prefix
+        val uri = preferences.getString("${prefix}video_uri", null) ?: return null
+        return WallpaperRuntimeSnapshot(
+            wallpaperId = preferences.getString("${prefix}wallpaper_id", null),
+            videoUri = uri,
+            scaleMode = preferences.getString("${prefix}scale_mode", WallpaperScaleMode.CROP)
+                ?: WallpaperScaleMode.CROP,
+            cropX = preferences.getFloat("${prefix}crop_x", 0f),
+            cropY = preferences.getFloat("${prefix}crop_y", 0f),
+            generation = preferences.getLong("${prefix}generation", 0L)
+        )
+    }
+
+    fun stagePreview(wallpaper: WallpaperEntity): WallpaperRuntimeSnapshot {
         val uri = requireNotNull(wallpaper.optimizedUri) { "Wallpaper has no optimized video." }
         val snapshot = WallpaperRuntimeSnapshot(
             wallpaperId = wallpaper.id,
@@ -63,10 +65,11 @@ class WallpaperRuntimeStore(context: Context) {
 
         preferences.edit().apply {
             putSnapshot(WallpaperRuntimeRole.PREVIEW, snapshot)
-            // The current API 30-35 apply flow clears the old KineWall assignment before preview.
-            // Mirroring the candidate lets the newly-created active Engine pick it up after apply.
+            // The apply flow clears the old KineWall assignment before preview. Mirroring the
+            // candidate lets an existing or newly-created active Engine pick it up after apply.
             putSnapshot(WallpaperRuntimeRole.ACTIVE, snapshot)
         }.apply()
+        return snapshot
     }
 
     fun updateCrop(role: WallpaperRuntimeRole, cropX: Float, cropY: Float) {

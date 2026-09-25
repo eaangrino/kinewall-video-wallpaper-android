@@ -153,6 +153,7 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         private var mediaPlayer: MediaPlayer? = null
+        private var playerVideoUri: String? = null
         private var videoRenderer: VideoFrameRenderer? = null
         private var playerInputSurface: Surface? = null
         private var isPrepared = false
@@ -205,7 +206,8 @@ class VideoWallpaperService : WallpaperService() {
                 this@VideoWallpaperService,
                 "WALLPAPER_RUNTIME_SNAPSHOT",
                 "role=$runtimeRole, wallpaperId=${runtimeSnapshot?.wallpaperId}, " +
-                    "generation=${runtimeSnapshot?.generation}"
+                    "generation=${runtimeSnapshot?.generation}, " +
+                    "uriAuthority=${runtimeSnapshot?.videoUri?.let { Uri.parse(it).authority }}"
             )
         }
 
@@ -303,6 +305,23 @@ class VideoWallpaperService : WallpaperService() {
                 return
             }
 
+            val configuredVideoUri = configuredVideoUriString()
+            if (player != null && playerVideoUri != configuredVideoUri) {
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "WALLPAPER_RUNTIME_VIDEO_CHANGED",
+                    "role=$runtimeRole, wallpaperId=${runtimeSnapshot?.wallpaperId}, " +
+                        "generation=${runtimeSnapshot?.generation}, " +
+                        "previousUriAuthority=" +
+                        "${playerVideoUri?.let { Uri.parse(it).authority }}, " +
+                        "currentUriAuthority=" +
+                        "${configuredVideoUri?.let { Uri.parse(it).authority }}"
+                )
+                reloadConfiguredVideo("runtime_video_changed_while_hidden", false)
+                return
+            }
+
+            updateRendererConfiguration()
             videoRenderer?.requestRedraw()
 
             if (videoRenderer?.playbackSnapshot()?.failed == true) {
@@ -550,6 +569,7 @@ class VideoWallpaperService : WallpaperService() {
 
             val player = MediaPlayer()
             mediaPlayer = player
+            playerVideoUri = videoUri.toString()
             isPrepared = false
             isPreparing = true
             notPlayingWhileVisibleReported = false
@@ -744,7 +764,9 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         private fun releasePlayer(reason: String) {
-            val player = mediaPlayer ?: return
+            val player = mediaPlayer
+            playerVideoUri = null
+            if (player == null) return
 
             DiagnosticLogger.log(
                 this@VideoWallpaperService,
@@ -1130,10 +1152,19 @@ class VideoWallpaperService : WallpaperService() {
         }
 
         private fun currentRuntimeSnapshot(): WallpaperRuntimeSnapshot? {
-            if (runtimeSnapshot == null) {
-                runtimeSnapshot = runtimeStore.read(runtimeRole)
+            val latestSnapshot = runtimeStore.read(runtimeRole)
+            if (latestSnapshot != runtimeSnapshot) {
+                runtimeSnapshot = latestSnapshot
+                DiagnosticLogger.log(
+                    this@VideoWallpaperService,
+                    "WALLPAPER_RUNTIME_SNAPSHOT_REFRESHED",
+                    "role=$runtimeRole, wallpaperId=${latestSnapshot?.wallpaperId}, " +
+                        "generation=${latestSnapshot?.generation}, " +
+                        "uriAuthority=" +
+                        "${latestSnapshot?.videoUri?.let { Uri.parse(it).authority }}"
+                )
             }
-            return runtimeSnapshot
+            return latestSnapshot
         }
 
         private fun configuredVideoUriString(): String? =

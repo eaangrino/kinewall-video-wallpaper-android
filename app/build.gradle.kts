@@ -7,14 +7,18 @@ plugins {
 
 android {
     namespace = "com.eaangrino.kinewall"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 1
+        }
+    }
 
     defaultConfig {
         applicationId = "com.eaangrino.kinewall"
         minSdk = 30
         targetSdk = 36
         versionCode = 7
-        versionName = "0.8.0"
+        versionName = "0.8.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
