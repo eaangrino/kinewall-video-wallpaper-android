@@ -3,7 +3,7 @@
 > [!WARNING]
 > KineWall sigue en una fase temprana de desarrollo y puede presentar fallos o comportamientos específicos de algunos dispositivos. Las pruebas se han realizado principalmente en un Xiaomi Redmi Note 13.
 
-KineWall es una aplicación Android nativa para usar videos locales como fondos de pantalla animados. Está desarrollada con Kotlin, Jetpack Compose, `WallpaperService`, `MediaPlayer` y un pipeline de renderizado con OpenGL ES.
+KineWall es una aplicación Android nativa para usar videos locales como fondos de pantalla animados. Está desarrollada con Kotlin, Jetpack Compose, `WallpaperService`, `MediaPlayer`, Media3 Transformer, Room, MediaStore y un pipeline de renderizado con OpenGL ES.
 
 El proyecto busca mantener la reproducción del video wallpaper de forma nativa, ligera e integrada con Android, sin depender de un runtime multiplataforma.
 
@@ -15,65 +15,85 @@ El proyecto busca mantener la reproducción del video wallpaper de forma nativa,
 - Interfaz con Jetpack Compose y Material 3.
 - Diseño responsive para teléfonos y tablets.
 - Soporte para Android 11 o superior (`minSdk 30`).
-- Selección de videos locales mediante Storage Access Framework de Android.
-- Persistencia del acceso al URI del video seleccionado.
-- Reproducción del video en loop infinito.
-- Audio del wallpaper silenciado y configurado para evitar su captura cuando Android lo soporte.
-- La reproducción se pausa cuando el wallpaper no está visible.
-- Dos modos de visualización:
-  - **Estirar** — llena toda la superficie del wallpaper y puede modificar la relación de aspecto del video.
-  - **Rellenar y recortar** — conserva la relación de aspecto y recorta el excedente para llenar toda la superficie.
-- Posicionamiento mediante arrastre en la vista previa de Android cuando se usa **Rellenar y recortar**.
-- Persistencia de la posición de recorte del video.
-- Acceso directo a la vista previa/aplicación nativa de live wallpapers de Android.
+- **Galería de videos KineWall** administrada por la aplicación, con miniaturas y estado por video.
+- Importación de videos locales mediante Storage Access Framework y `ActivityResultContracts.OpenDocument`.
+- Los originales importados se copian al almacenamiento MediaStore administrado por KineWall para poder reprocesarlos después.
+- Análisis de metadata del video: resolución, frame rate, bitrate, codec, duración y presencia de audio.
+- Opciones de optimización adaptadas al dispositivo para resolución, frame rate y bitrate.
+- Perfil recomendado basado en el video original, el tamaño de pantalla y las capacidades disponibles del encoder H.264.
+- Los videos optimizados se publican como MP4/H.264 cuando es necesario recodificar el video.
+- La pista de audio se elimina físicamente de los videos optimizados.
+- La optimización no hace upscale y conserva la relación de aspecto del video original.
+- El reprocesamiento siempre parte del original administrado y no de una copia optimizada anterior.
+- Si un reprocesamiento falla, se conserva la salida optimizada previa cuando existe.
+- Acciones de galería para **Apply wallpaper**, **Edit / Reprocess**, **Details** y **Delete**.
+- Al tocar una miniatura aplicable se abre directamente la vista previa nativa del live wallpaper de Android.
+- El wallpaper activo se identifica con el indicador **Applied**.
+- Dos modos de visualización en tiempo de ejecución:
+  - **Stretch** — llena la superficie y puede modificar la relación de aspecto.
+  - **Fill & crop** — conserva la relación de aspecto y recorta el excedente.
+- Posicionamiento mediante arrastre en la vista previa de Android cuando se usa **Fill & crop**.
+- Reproducción en loop infinito con el audio del wallpaper deshabilitado.
 - Recuperación automática del pipeline de reproducción y renderizado cuando se detecta un bloqueo.
+- Los recursos de reproducción del wallpaper se liberan temporalmente durante el procesamiento para reducir conflictos por codecs.
 - Logging de diagnóstico opcional, desactivado por defecto.
 - Archivos de diagnóstico diarios con opciones para ver, descargar, compartir y eliminar.
-- Comprobación de nuevas versiones publicadas en GitHub Releases.
-- Descarga e instalación de nuevas versiones APK desde la propia aplicación.
-- No requiere permisos globales de acceso a medios ni al almacenamiento externo para seleccionar videos.
+- Comprobación de nuevas versiones en GitHub Releases e instalación de actualizaciones APK desde la aplicación.
+- No requiere permisos globales de acceso a medios ni al almacenamiento externo.
 
 ## Arquitectura
 
-KineWall utiliza el sistema de live wallpapers de Android junto con un pipeline multimedia y gráfico nativo.
+KineWall separa la administración y el preprocesamiento de videos de la reproducción del live wallpaper.
 
 ```text
 ComposeMainActivity
- ├─ Selector de video (OpenDocument)
- ├─ Preferencias de video y visualización
- ├─ Configuración del wallpaper
- ├─ Navegación hacia Ajustes y Diagnósticos
- └─ Comprobación de actualizaciones en GitHub Releases
+ ├─ Importación de video con OpenDocument
+ ├─ WallpaperGalleryScreen
+ │   ├─ Miniaturas y estados de la galería
+ │   ├─ Acciones Apply / Edit / Details / Delete
+ │   └─ Configuración de optimización
+ ├─ WallpaperLibraryViewModel
+ │   ├─ KineWallDatabase (Room)
+ │   ├─ VideoMetadataAnalyzer
+ │   ├─ VideoOptimizationPlanner
+ │   ├─ VideoTranscoder (Media3 Transformer)
+ │   └─ VideoStorage (MediaStore)
+ ├─ WallpaperRuntimeStore
+ └─ Ajustes / diagnósticos / actualizaciones
 
 VideoWallpaperService
  └─ WallpaperService.Engine
      ├─ MediaPlayer
-     │   └─ Decodifica el video seleccionado hacia un SurfaceTexture
+     │   └─ Decodifica el video optimizado hacia un SurfaceTexture
      ├─ VideoFrameRenderer
      │   ├─ EGL / OpenGL ES 2.0
      │   ├─ Renderizado Stretch
-     │   ├─ Renderizado Fill & Crop
+     │   ├─ Renderizado Fill & crop
      │   └─ Posicionamiento del recorte
      └─ Surface del wallpaper de Android
 ```
 
-La ruta del video es:
+La ruta del video administrado es:
 
 ```text
-Video local
+Video local seleccionado con OpenDocument
    ↓
-MediaPlayer / stack multimedia de Android
+MediaStore: Movies/KineWall/Originals/
    ↓
-SurfaceTexture
+VideoMetadataAnalyzer + VideoOptimizationPlanner
    ↓
-VideoFrameRenderer (OpenGL ES)
+Media3 Transformer
    ↓
-Surface del wallpaper
+Cache temporal privada: cache/kinewall/transcode/
    ↓
-Compositor de Android / pantalla
+Validación
+   ↓
+MediaStore: Movies/KineWall/Optimized/
+   ↓
+Galería / vista previa nativa de live wallpaper
 ```
 
-El renderer permite que KineWall controle el escalado y la posición del recorte en lugar de depender únicamente del escalado de superficies de `MediaPlayer`.
+La reproducción del live wallpaper sigue siendo nativa y utiliza `MediaPlayer` junto con el renderer OpenGL. Media3 se utiliza únicamente para el preprocesamiento.
 
 ## Requisitos
 
@@ -129,19 +149,34 @@ También puedes abrir el proyecto directamente en Android Studio y ejecutarlo en
 ## Uso
 
 1. Abre KineWall.
-2. Pulsa **Select video**.
+2. Pulsa el botón **+** de la galería.
 3. Selecciona un video local mediante el selector de documentos de Android.
-4. Elige un modo de visualización:
-   - **Fill & crop**
-   - **Stretch**
-5. Pulsa **Apply wallpaper**.
-6. Android abrirá la vista previa nativa del live wallpaper.
-7. Si usas **Fill & crop**, puedes arrastrar el video en la vista previa para elegir qué zona queda visible.
-8. Confirma el wallpaper desde la interfaz del sistema Android.
+4. KineWall copia el archivo seleccionado a su carpeta de originales administrados y analiza el video.
+5. Elige los parámetros de optimización:
+   - Resolución.
+   - Frame rate.
+   - Bitrate.
+   - Modo de visualización en runtime: **Fill and crop** o **Stretch**.
+6. Pulsa **Save & process**.
+7. Cuando termine el procesamiento, pulsa **Apply now** o vuelve a la galería.
+8. Desde la galería, toca una miniatura aplicable o usa **Apply wallpaper** desde el menú de tres puntos.
+9. Android abrirá la vista previa nativa del live wallpaper.
+10. Si usas **Fill & crop**, puedes arrastrar el video para elegir qué zona queda visible.
+11. Confirma el wallpaper desde la interfaz del sistema Android.
 
-KineWall conserva el video seleccionado, el modo de visualización y la posición del recorte.
+El menú de tres puntos también ofrece **Edit / Reprocess**, **Details** y **Delete**.
 
-Las opciones finales de destino del wallpaper son proporcionadas por Android. Dependiendo del dispositivo y de la versión de Android, el sistema puede ofrecer pantalla de inicio, pantalla de bloqueo, ambas o un conjunto más reducido de opciones.
+### Galería y optimización
+
+Cada video importado se registra como un elemento de la galería en la base de datos interna Room. KineWall conserva metadata del original, la generación optimizada actual, los parámetros de optimización, el modo de visualización, la posición de recorte y el estado de disponibilidad.
+
+La optimización no recorta ni estira el video codificado. Conserva la relación de aspecto del original y evita hacer upscale. **Fill & crop** y **Stretch** se aplican posteriormente mediante el renderer OpenGL mientras el wallpaper está funcionando.
+
+El perfil recomendado normalmente limita el frame rate a 30 FPS y la resolución al tamaño de la pantalla sin superar la resolución original. Los frame rates superiores solo se ofrecen cuando el dispositivo informa soporte H.264 para ese tamaño y frecuencia. Los presets de bitrate disponibles son 2, 3, 4, 6 y 8 Mbps, según las capacidades del encoder.
+
+Si el origen ya es H.264 compatible y los parámetros elegidos no requieren recodificar el video, Media3 puede evitar una recodificación innecesaria mientras elimina la pista de audio. Cuando sí se necesita encoding, KineWall genera video H.264 dentro de un MP4.
+
+El reprocesamiento siempre utiliza el original administrado. Una nueva generación se valida antes de reemplazar la salida anterior, y el archivo previo puede conservarse temporalmente cuando todavía corresponde al wallpaper activo.
 
 ## Modos de visualización
 
@@ -197,9 +232,25 @@ KineWall selecciona el APK normal de producción publicado en GitHub Releases e 
 
 ## Almacenamiento y permisos
 
-KineWall utiliza `ActivityResultContracts.OpenDocument` para que el usuario seleccione explícitamente un video. La aplicación guarda el URI `content://` devuelto por Android y solicita acceso persistente de lectura cuando el proveedor de documentos lo soporta.
+KineWall utiliza `ActivityResultContracts.OpenDocument` únicamente para que el usuario seleccione el archivo de origen. Después de seleccionarlo, el video se copia al almacenamiento MediaStore administrado por KineWall, por lo que el funcionamiento normal de la galería no depende de mantener vivo el URI original del proveedor de documentos.
 
-Como la selección del video se realiza mediante el selector de documentos de Android, KineWall no necesita acceso global a la biblioteca multimedia ni al almacenamiento externo.
+Almacenamiento compartido administrado:
+
+```text
+Movies/
+└── KineWall/
+    ├── Originals/
+    └── Optimized/
+```
+
+- `Originals/` contiene las copias importadas utilizadas para reprocesar en el futuro.
+- `Optimized/` contiene las generaciones procesadas utilizadas por el live wallpaper.
+- Los archivos temporales de transcodificación se crean en el directorio privado `cache/kinewall/transcode/` y se limpian después del procesamiento.
+- La metadata de la galería se guarda internamente en la base Room `kinewall.db`.
+
+El flujo de eliminación permite quitar un elemento únicamente de KineWall o eliminar también del dispositivo los archivos administrados por KineWall. Los archivos compartidos de MediaStore pueden permanecer en el dispositivo después de desinstalar la aplicación si no se eliminan por separado.
+
+Como la importación y el acceso a medios administrados utilizan el selector de documentos de Android y MediaStore, KineWall no necesita acceso global a la biblioteca multimedia ni al almacenamiento externo.
 
 Los permisos utilizados por la aplicación incluyen:
 
@@ -221,27 +272,26 @@ El servicio puede detectar situaciones como:
 - Los frames llegan al renderer pero dejan de presentarse en pantalla.
 - El reproductor o el renderer entran en un estado inválido.
 
-Cuando se detecta un bloqueo, KineWall intenta reconstruir el pipeline de reproducción y renderizado y continuar cerca de la posición anterior del video.
+Cuando se detecta un bloqueo, KineWall intenta reconstruir el pipeline de reproducción y renderizado y continuar cerca de la posición anterior del video. Existe un periodo de espera entre recuperaciones para evitar reconstrucciones repetidas en un bucle cerrado.
 
-Existe un periodo de espera entre recuperaciones para evitar recrear el pipeline repetidamente en un bucle cerrado.
+Mientras se optimiza o reprocesa un video, KineWall se coordina con el servicio de wallpaper y libera temporalmente los recursos del codec de `MediaPlayer`. Cuando termina el procesamiento y el wallpaper vuelve a estar visible, la reproducción se recrea sobre la superficie del renderer existente cuando es posible.
 
 ## Rendimiento
 
-KineWall utiliza el stack multimedia nativo de Android para decodificar el video y OpenGL ES para presentar los frames decodificados sobre la superficie del wallpaper.
+KineWall utiliza el stack multimedia nativo de Android para decodificar el live wallpaper y OpenGL ES para mostrar los frames. Media3 Transformer se utiliza únicamente cuando la importación o el reprocesamiento necesitan preprocesamiento.
+
+El optimizador intenta evitar trabajo innecesario:
+
+- Nunca hace upscale intencional por encima de la resolución del origen.
+- La resolución recomendada no supera el lado largo de la pantalla del dispositivo.
+- El frame rate recomendado normalmente no supera 30 FPS.
+- Se consultan las capacidades del encoder H.264 antes de ofrecer combinaciones de tamaño, frame rate y bitrate.
+- Los orígenes H.264 compatibles pueden evitar una recodificación innecesaria cuando los parámetros seleccionados lo permiten.
+- El audio se elimina del archivo procesado en vez de limitarse a silenciarlo durante la reproducción.
+
+El consumo real y la compatibilidad del procesamiento siguen dependiendo del video y del dispositivo, incluyendo soporte de codecs, resolución, frame rate, bitrate, GPU, resolución de pantalla y disponibilidad de recursos de codec por hardware.
 
 La reproducción se pausa cuando el wallpaper deja de estar visible, y los recursos del reproductor y renderer se liberan cuando se destruye la superficie del wallpaper.
-
-El consumo real depende en gran medida del video seleccionado y del dispositivo, incluyendo:
-
-- Codec y soporte de decodificación por hardware.
-- Resolución del video.
-- Frame rate.
-- Bitrate.
-- GPU y resolución de pantalla del dispositivo.
-- Frecuencia de refresco de la pantalla.
-- Tiempo durante el cual el launcher o wallpaper permanece visible.
-
-Para una mejor eficiencia, conviene utilizar un formato decodificable por hardware, como H.264/AVC, con una resolución y un frame rate razonables para el dispositivo objetivo.
 
 ## Notas sobre dispositivos
 
@@ -254,15 +304,18 @@ Las opciones de destino del wallpaper también pueden variar según la versión 
 ## Limitaciones conocidas
 
 - Android 10 y versiones anteriores no están soportados.
-- KineWall utiliza actualmente archivos de video locales seleccionados por el usuario.
-- La compatibilidad de codecs y contenedores depende de Android y del stack multimedia del dispositivo.
-- El audio del wallpaper está deshabilitado intencionalmente.
+- KineWall actualmente importa archivos de video locales seleccionados por el usuario.
+- La capacidad de decodificación de video y encoding H.264 depende de Android y del stack multimedia del dispositivo.
+- Algunas combinaciones de alta resolución o alto frame rate pueden no estar disponibles si el encoder del dispositivo no informa soporte.
+- El dispositivo todavía puede rechazar una conversión por presión temporal de memoria o recursos de codec; bajar resolución o frame rate puede ayudar.
+- El audio se elimina intencionalmente de los videos optimizados y también se mantiene silenciado durante la reproducción.
+- Los originales y optimizados administrados por KineWall se guardan en ubicaciones compartidas de MediaStore y pueden permanecer en el dispositivo después de desinstalar la aplicación si no se eliminan.
 - La instalación de actualizaciones APK desde la aplicación requiere que Android permita a KineWall actuar como origen de instalación.
 - La aplicación no puede controlar qué destinos de wallpaper decide exponer el fabricante dentro de la interfaz de live wallpapers de Android.
 
 ### Problema conocido
 
-En casos poco frecuentes, el video wallpaper todavía puede quedar congelado a pesar del sistema de recuperación automática. Volver a aplicar KineWall desde **Apply wallpaper** normalmente restaura la reproducción.
+En casos poco frecuentes, el video wallpaper todavía puede quedar congelado a pesar del sistema de recuperación automática. Volver a aplicar KineWall desde la galería normalmente restaura la reproducción.
 
 Si el problema puede reproducirse, activar los logs de diagnóstico antes de provocarlo puede aportar información útil para reportarlo.
 
@@ -273,9 +326,19 @@ app/src/main/
 ├─ AndroidManifest.xml
 ├─ java/com/eaangrino/kinewall/
 │  ├─ ComposeMainActivity.kt
-│  ├─ ComposeDiagnosticsActivity.kt
+│  ├─ WallpaperGalleryScreen.kt
+│  ├─ WallpaperLibraryViewModel.kt
+│  ├─ WallpaperLibraryModels.kt
+│  ├─ KineWallDatabase.kt
+│  ├─ VideoMetadataAnalyzer.kt
+│  ├─ VideoOptimizationPlanner.kt
+│  ├─ VideoTranscoder.kt
+│  ├─ VideoStorage.kt
+│  ├─ WallpaperRuntimeStore.kt
+│  ├─ WallpaperMediaResourceCoordinator.kt
 │  ├─ VideoWallpaperService.kt
 │  ├─ VideoFrameRenderer.kt
+│  ├─ ComposeDiagnosticsActivity.kt
 │  ├─ DiagnosticLogger.kt
 │  ├─ DiagnosticSettings.kt
 │  ├─ UpdateChecker.kt
