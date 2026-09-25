@@ -15,6 +15,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.activity.viewModels
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -68,12 +69,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.core.content.FileProvider
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.eaangrino.kinewall.ui.KinewallTheme
 import java.io.File
 import kotlinx.coroutines.launch
 
 class ComposeMainActivity : ComponentActivity() {
 
+    private val wallpaperLibraryViewModel: WallpaperLibraryViewModel by viewModels()
     private var latestReleaseVersion by mutableStateOf<String?>(null)
     private var releaseCheckCompleted by mutableStateOf(false)
     private var pendingUpdate: AvailableUpdate? = null
@@ -105,6 +108,8 @@ class ComposeMainActivity : ComponentActivity() {
 
     override fun onResume() {
         super.onResume()
+
+        wallpaperLibraryViewModel.syncRuntimeState(isKineWallWallpaperActive())
 
         val update = pendingUpdate ?: return
         if (packageManager.canRequestPackageInstalls()) {
@@ -308,22 +313,7 @@ class ComposeMainActivity : ComponentActivity() {
 
     @Composable
     private fun MainApp() {
-        val preferences = remember {
-            getSharedPreferences(PREFERENCES_NAME, MODE_PRIVATE)
-        }
-        val initialVideoUri = remember {
-            preferences.getString(KEY_VIDEO_URI, null)?.let(Uri::parse)
-        }
-
-        var selectedVideoName by remember {
-            mutableStateOf(initialVideoUri?.let(::resolveSelectedVideoName))
-        }
-        var scaleMode by rememberSaveable {
-            mutableStateOf(
-                preferences.getString(KEY_SCALE_MODE, SCALE_MODE_CROP)
-                    ?: SCALE_MODE_CROP
-            )
-        }
+        val libraryState by wallpaperLibraryViewModel.state.collectAsStateWithLifecycle()
         var destinationName by rememberSaveable {
             mutableStateOf(MainDestination.WALLPAPER.name)
         }
@@ -337,28 +327,8 @@ class ComposeMainActivity : ComponentActivity() {
                 return@rememberLauncherForActivityResult
             }
 
-            try {
-                contentResolver.takePersistableUriPermission(
-                    uri,
-                    Intent.FLAG_GRANT_READ_URI_PERMISSION
-                )
-            } catch (error: SecurityException) {
-                DiagnosticLogger.log(
-                    this,
-                    "VIDEO_URI_PERMISSION_NOT_PERSISTABLE",
-                    uriDescription(uri),
-                    error
-                )
-            }
-
-            preferences.edit()
-                .putString(KEY_VIDEO_URI, uri.toString())
-                .putFloat(KEY_CROP_POSITION_X, 0f)
-                .putFloat(KEY_CROP_POSITION_Y, 0f)
-                .apply()
-
-            DiagnosticLogger.log(this, "VIDEO_SELECTED", uriDescription(uri))
-            selectedVideoName = resolveSelectedVideoName(uri)
+            DiagnosticLogger.log(this, "VIDEO_SELECTED_FOR_IMPORT", uriDescription(uri))
+            wallpaperLibraryViewModel.importVideo(uri)
         }
 
         BackHandler(enabled = destination == MainDestination.SETTINGS) {
@@ -370,37 +340,21 @@ class ComposeMainActivity : ComponentActivity() {
             onDestinationSelected = { destinationName = it.name }
         ) { contentPadding ->
             when (destination) {
-                MainDestination.WALLPAPER -> WallpaperScreen(
+                MainDestination.WALLPAPER -> WallpaperGalleryScreen(
                     contentPadding = contentPadding,
-                    selectedVideoName = selectedVideoName,
-                    scaleMode = scaleMode,
-                    onSelectVideo = { videoPicker.launch(arrayOf("video/*")) },
-                    onScaleModeChange = { newMode ->
-                        scaleMode = newMode
-                        preferences.edit()
-                            .putString(KEY_SCALE_MODE, newMode)
-                            .apply()
-                        DiagnosticLogger.log(
-                            this,
-                            "SCALE_MODE_CHANGED",
-                            "scaleMode=$newMode"
-                        )
-                    },
-                    onApplyWallpaper = {
-                        DiagnosticLogger.log(this, "OPEN_LIVE_WALLPAPER_PICKER")
-                        resetCurrentKineWallWallpaper()
-                        startActivity(
-                            Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
-                                putExtra(
-                                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
-                                    ComponentName(
-                                        this@ComposeMainActivity,
-                                        VideoWallpaperService::class.java
-                                    )
-                                )
-                            }
-                        )
-                    }
+                    state = libraryState,
+                    onAddVideo = { videoPicker.launch(arrayOf("video/*")) },
+                    onApplyWallpaper = ::openWallpaperPreview,
+                    onEditWallpaper = wallpaperLibraryViewModel::openEditor,
+                    onRemoveWallpaper = wallpaperLibraryViewModel::removeFromLibrary,
+                    onResolutionSelected = wallpaperLibraryViewModel::selectResolution,
+                    onFrameRateSelected = wallpaperLibraryViewModel::selectFrameRate,
+                    onBitrateSelected = wallpaperLibraryViewModel::selectBitrate,
+                    onScaleModeSelected = wallpaperLibraryViewModel::selectScaleMode,
+                    onSaveOptimization = wallpaperLibraryViewModel::processEditor,
+                    onDismissEditor = wallpaperLibraryViewModel::dismissEditor,
+                    onClearCompleted = wallpaperLibraryViewModel::clearCompleted,
+                    onDismissError = wallpaperLibraryViewModel::dismissError
                 )
 
                 MainDestination.SETTINGS -> SettingsScreen(
@@ -903,6 +857,39 @@ class ComposeMainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    private fun openWallpaperPreview(wallpaper: WallpaperEntity) {
+        if (wallpaper.optimizedUri == null) return
+
+        // Keep the existing clear-before-preview workaround until it is proven safe to remove
+        // across the OEMs where KineWall has already been tested.
+        resetCurrentKineWallWallpaper()
+        WallpaperRuntimeStore(this).stagePreview(wallpaper)
+
+        DiagnosticLogger.log(
+            this,
+            "OPEN_LIVE_WALLPAPER_PICKER",
+            "wallpaperId=${wallpaper.id}, generation=${wallpaper.optimizedGeneration}"
+        )
+        startActivity(
+            Intent(WallpaperManager.ACTION_CHANGE_LIVE_WALLPAPER).apply {
+                putExtra(
+                    WallpaperManager.EXTRA_LIVE_WALLPAPER_COMPONENT,
+                    ComponentName(
+                        this@ComposeMainActivity,
+                        VideoWallpaperService::class.java
+                    )
+                )
+            }
+        )
+    }
+
+    private fun isKineWallWallpaperActive(): Boolean {
+        val wallpaperManager = WallpaperManager.getInstance(this)
+        val kineWallComponent = ComponentName(this, VideoWallpaperService::class.java)
+        return runCatching { wallpaperManager.wallpaperInfo?.component == kineWallComponent }
+            .getOrDefault(false)
     }
 
     private fun resetCurrentKineWallWallpaper() {
