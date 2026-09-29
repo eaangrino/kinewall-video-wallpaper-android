@@ -22,20 +22,11 @@ class WallpaperRuntimeStore(context: Context) {
     fun read(role: WallpaperRuntimeRole): WallpaperRuntimeSnapshot? {
         readExact(role)?.let { return it }
 
-        if (role == WallpaperRuntimeRole.PREVIEW) {
-            return read(WallpaperRuntimeRole.ACTIVE)
+        return if (role == WallpaperRuntimeRole.PREVIEW) {
+            readExact(WallpaperRuntimeRole.ACTIVE)
+        } else {
+            null
         }
-
-        val legacyUri = preferences.getString(LEGACY_VIDEO_URI, null) ?: return null
-        return WallpaperRuntimeSnapshot(
-            wallpaperId = null,
-            videoUri = legacyUri,
-            scaleMode = preferences.getString(LEGACY_SCALE_MODE, WallpaperScaleMode.CROP)
-                ?: WallpaperScaleMode.CROP,
-            cropX = preferences.getFloat(LEGACY_CROP_X, 0f),
-            cropY = preferences.getFloat(LEGACY_CROP_Y, 0f),
-            generation = 0L
-        )
     }
 
     fun readExact(role: WallpaperRuntimeRole): WallpaperRuntimeSnapshot? {
@@ -106,14 +97,6 @@ class WallpaperRuntimeStore(context: Context) {
             }
         }
 
-        preferences.getString(LEGACY_VIDEO_URI, null)?.let { current ->
-            val migrated = transform(current)
-            if (migrated != current) {
-                editor.putString(LEGACY_VIDEO_URI, migrated)
-                changed = true
-            }
-        }
-
         if (changed) editor.apply()
     }
 
@@ -158,9 +141,5 @@ class WallpaperRuntimeStore(context: Context) {
 
     companion object {
         private const val PREFERENCES_NAME = "kinewall_preferences"
-        private const val LEGACY_VIDEO_URI = "video_uri"
-        private const val LEGACY_SCALE_MODE = "scale_mode"
-        private const val LEGACY_CROP_X = "crop_position_x"
-        private const val LEGACY_CROP_Y = "crop_position_y"
     }
 }

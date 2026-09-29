@@ -380,7 +380,8 @@ class WallpaperLibraryViewModel(application: Application) : AndroidViewModel(app
 
     fun syncRuntimeState(kineWallIsActive: Boolean) {
         viewModelScope.launch {
-            val active = runtimeStore.read(WallpaperRuntimeRole.ACTIVE).takeIf { kineWallIsActive }
+            val activeSnapshot = runtimeStore.readExact(WallpaperRuntimeRole.ACTIVE)
+            val active = activeSnapshot.takeIf { kineWallIsActive }
             val preview = runtimeStore.readExact(WallpaperRuntimeRole.PREVIEW)
 
             preview?.wallpaperId?.let { wallpaperId ->
@@ -409,16 +410,17 @@ class WallpaperLibraryViewModel(application: Application) : AndroidViewModel(app
             }
 
             _state.update { it.copy(appliedWallpaperId = active?.wallpaperId) }
-            if (!kineWallIsActive) {
-                if (preview == null) {
-                    runtimeStore.clearActive()
-                } else {
-                    DiagnosticLogger.log(
-                        getApplication(),
-                        "WALLPAPER_RUNTIME_ACTIVE_RETAINED_FOR_HANDOFF",
-                        "wallpaperId=${preview.wallpaperId}, generation=${preview.generation}"
-                    )
-                }
+            if (!kineWallIsActive && activeSnapshot != null) {
+                DiagnosticLogger.log(
+                    getApplication(),
+                    if (preview != null) {
+                        "WALLPAPER_RUNTIME_ACTIVE_RETAINED_FOR_HANDOFF"
+                    } else {
+                        "WALLPAPER_RUNTIME_ACTIVE_PRESERVED_WHILE_SYSTEM_INACTIVE"
+                    },
+                    "wallpaperId=${activeSnapshot.wallpaperId}, " +
+                        "generation=${activeSnapshot.generation}"
+                )
             }
             runtimeStore.clearPreview()
         }
