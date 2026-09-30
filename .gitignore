@@ -32,3 +32,5 @@
 
 # KineWall diagnostic exports
 kinewall-diagnostics-*.txt
+*.txt
+*.patch
