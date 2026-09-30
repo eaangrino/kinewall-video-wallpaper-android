@@ -1,5 +1,6 @@
 package com.eaangrino.kinewall
 
+import android.content.ContentUris
 import android.content.ContentValues
 import android.content.Context
 import android.net.Uri
@@ -19,6 +20,7 @@ class VideoStorage(private val context: Context) {
 
     private val resolver = context.contentResolver
     private val collection = MediaStore.Video.Media.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
+    private val filesCollection = MediaStore.Files.getContentUri(MediaStore.VOLUME_EXTERNAL_PRIMARY)
 
     fun importOriginal(sourceUri: Uri, wallpaperId: String): ImportedVideo {
         val sourceName = resolveDisplayName(sourceUri) ?: "video"
@@ -29,7 +31,8 @@ class VideoStorage(private val context: Context) {
             ?: "mp4"
         val stem = sourceName.substringBeforeLast('.', sourceName).safeFileStem()
         val outputName = "${stem}__kw_${wallpaperId}_original.$extension"
-        val target = createPendingMedia(outputName, mimeType, ORIGINALS_PATH)
+        val target = createPendingMedia(outputName, mimeType, STAGING_PATH)
+        val stableTarget = asFilesUri(target)
 
         try {
             resolver.openInputStream(sourceUri).use { input ->
@@ -39,13 +42,14 @@ class VideoStorage(private val context: Context) {
                     input.copyTo(output)
                 }
             }
-            publish(target)
+            return ImportedVideo(
+                uri = finalizeManagedMedia(target, ORIGINALS_PATH),
+                displayName = sourceName
+            )
         } catch (error: Throwable) {
-            resolver.delete(target, null, null)
+            resolver.delete(stableTarget, null, null)
             throw error
         }
-
-        return ImportedVideo(target, sourceName)
     }
 
     fun publishOptimized(
@@ -56,7 +60,8 @@ class VideoStorage(private val context: Context) {
     ): Uri {
         val stem = title.substringBeforeLast('.', title).safeFileStem()
         val outputName = "${stem}__kw_${wallpaperId}_g$generation.mp4"
-        val target = createPendingMedia(outputName, "video/mp4", OPTIMIZED_PATH)
+        val target = createPendingMedia(outputName, "video/mp4", STAGING_PATH)
+        val stableTarget = asFilesUri(target)
 
         try {
             sourceFile.inputStream().use { input ->
@@ -65,17 +70,67 @@ class VideoStorage(private val context: Context) {
                     input.copyTo(output)
                 }
             }
-            publish(target)
+            return finalizeManagedMedia(target, OPTIMIZED_PATH)
         } catch (error: Throwable) {
-            resolver.delete(target, null, null)
+            resolver.delete(stableTarget, null, null)
             throw error
         }
-        return target
     }
 
     fun createTranscodeFile(wallpaperId: String): File {
         val directory = File(context.cacheDir, "kinewall/transcode").apply { mkdirs() }
         return File(directory, "${wallpaperId}_${System.currentTimeMillis()}.mp4")
+    }
+
+    fun stableManagedUri(uriString: String?): String? {
+        if (uriString.isNullOrBlank()) return uriString
+
+        val uri = Uri.parse(uriString)
+        if (uri.scheme != "content" || uri.authority != MediaStore.AUTHORITY) return uriString
+        if (resolveRelativePath(uri)?.startsWith(KINEWALL_PATH) != true) return uriString
+
+        return asFilesUri(uri).toString()
+    }
+
+    fun needsStableUriMigration(uriString: String?): Boolean {
+        if (uriString.isNullOrBlank()) return false
+        val uri = Uri.parse(uriString)
+        return uri.scheme == "content" &&
+            uri.authority == MediaStore.AUTHORITY &&
+            uri.pathSegments.contains("video")
+    }
+
+    fun ensureNoMediaForManagedUri(uriString: String?) {
+        if (uriString.isNullOrBlank()) return
+        val uri = Uri.parse(uriString)
+        if (resolveRelativePath(uri)?.startsWith(KINEWALL_PATH) != true) return
+
+        val file = resolveDirectFile(uri) ?: run {
+            DiagnosticLogger.log(
+                context,
+                "LIBRARY_NOMEDIA_CREATE_FAILED",
+                "reason=managed_path_unavailable"
+            )
+            return
+        }
+        val root = kineWallRootFor(file) ?: return
+        val marker = File(root, MediaStore.MEDIA_IGNORE_FILENAME)
+        if (marker.isFile) return
+
+        runCatching {
+            require(marker.createNewFile() || marker.isFile) {
+                "Android rejected creation of ${MediaStore.MEDIA_IGNORE_FILENAME}."
+            }
+        }.onSuccess {
+            DiagnosticLogger.log(context, "LIBRARY_NOMEDIA_CREATED")
+        }.onFailure { error ->
+            DiagnosticLogger.log(
+                context,
+                "LIBRARY_NOMEDIA_CREATE_FAILED",
+                "directory=${root.name}",
+                error
+            )
+        }
     }
 
     fun uriExists(uriString: String?): Boolean {
@@ -121,23 +176,91 @@ class VideoStorage(private val context: Context) {
 
     fun cleanupStalePendingMedia() {
         val cutoffSeconds = (System.currentTimeMillis() - TimeUnit.HOURS.toMillis(24)) / 1000L
-        val projection = arrayOf(MediaStore.Video.Media._ID)
+        val projection = arrayOf(MediaStore.Files.FileColumns._ID)
         val selection =
-            "${MediaStore.MediaColumns.IS_PENDING}=1 AND " +
-                "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? AND " +
+            "${MediaStore.MediaColumns.IS_PENDING}=1 AND (" +
+                "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ? OR " +
+                "${MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?) AND " +
                 "${MediaStore.MediaColumns.DATE_ADDED} < ?"
-        val selectionArgs = arrayOf("Movies/KineWall/%", cutoffSeconds.toString())
+        val selectionArgs = arrayOf(
+            "$KINEWALL_PATH%",
+            "$STAGING_PATH%",
+            cutoffSeconds.toString()
+        )
 
         runCatching {
-            resolver.query(collection, projection, selection, selectionArgs, null)?.use { cursor ->
-                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Video.Media._ID)
+            resolver.query(filesCollection, projection, selection, selectionArgs, null)?.use { cursor ->
+                val idColumn = cursor.getColumnIndexOrThrow(MediaStore.Files.FileColumns._ID)
                 while (cursor.moveToNext()) {
-                    val uri = Uri.withAppendedPath(collection, cursor.getLong(idColumn).toString())
+                    val uri = ContentUris.withAppendedId(filesCollection, cursor.getLong(idColumn))
                     resolver.delete(uri, null, null)
                 }
             }
         }
     }
+
+    private fun finalizeManagedMedia(uri: Uri, relativePath: String): Uri {
+        val stableUri = asFilesUri(uri)
+        val moved = resolver.update(
+            uri,
+            ContentValues().apply {
+                put(MediaStore.MediaColumns.RELATIVE_PATH, relativePath)
+            },
+            null,
+            null
+        )
+        require(moved > 0) { "Unable to move the KineWall video into managed storage." }
+
+        publish(stableUri)
+        ensureNoMediaForManagedUri(stableUri.toString())
+        return stableUri
+    }
+
+    private fun asFilesUri(uri: Uri): Uri = ContentUris.withAppendedId(
+        filesCollection,
+        ContentUris.parseId(uri)
+    )
+
+    private fun kineWallRootFor(file: File): File? {
+        var directory = file.parentFile
+        while (directory != null) {
+            if (
+                directory.name == "KineWall" &&
+                directory.parentFile?.name == "Movies"
+            ) {
+                return directory
+            }
+            directory = directory.parentFile
+        }
+        return null
+    }
+
+    private fun resolveRelativePath(uri: Uri): String? = runCatching {
+        resolver.query(
+            uri,
+            arrayOf(MediaStore.MediaColumns.RELATIVE_PATH),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val index = cursor.getColumnIndex(MediaStore.MediaColumns.RELATIVE_PATH)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index) else null
+        }
+    }.getOrNull()
+
+    @Suppress("DEPRECATION")
+    private fun resolveDirectFile(uri: Uri): File? = runCatching {
+        resolver.query(
+            uri,
+            arrayOf(MediaStore.MediaColumns.DATA),
+            null,
+            null,
+            null
+        )?.use { cursor ->
+            val index = cursor.getColumnIndex(MediaStore.MediaColumns.DATA)
+            if (index >= 0 && cursor.moveToFirst()) cursor.getString(index)?.let(::File) else null
+        }
+    }.getOrNull()
 
     private fun createPendingMedia(name: String, mimeType: String, relativePath: String): Uri {
         val values = ContentValues().apply {
@@ -155,7 +278,9 @@ class VideoStorage(private val context: Context) {
         val values = ContentValues().apply {
             put(MediaStore.Video.Media.IS_PENDING, 0)
         }
-        resolver.update(uri, values, null, null)
+        require(resolver.update(uri, values, null, null) > 0) {
+            "Unable to publish the KineWall media file."
+        }
     }
 
     private fun resolveDisplayName(uri: Uri): String? = runCatching {
@@ -177,7 +302,9 @@ class VideoStorage(private val context: Context) {
         .ifBlank { "video" }
 
     companion object {
-        private const val ORIGINALS_PATH = "Movies/KineWall/Originals/"
-        private const val OPTIMIZED_PATH = "Movies/KineWall/Optimized/"
+        private const val KINEWALL_PATH = "Movies/KineWall/"
+        private const val ORIGINALS_PATH = "${KINEWALL_PATH}Originals/"
+        private const val OPTIMIZED_PATH = "${KINEWALL_PATH}Optimized/"
+        private const val STAGING_PATH = "Movies/KineWallStaging/"
     }
 }

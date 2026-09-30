@@ -7,9 +7,83 @@ import java.net.URL
 
 internal object UpdateInstaller {
     private const val UPDATE_DIRECTORY = "updates"
+    private const val UPDATE_STATE_PREFERENCES = "kinewall_update_state"
+    private const val KEY_LAST_VERSION_NAME = "last_version_name"
+    private const val KEY_PENDING_FROM_VERSION = "pending_from_version"
+    private const val KEY_PENDING_TO_VERSION = "pending_to_version"
     private const val CONNECT_TIMEOUT_MS = 10_000
     private const val READ_TIMEOUT_MS = 30_000
     private const val MAX_REDIRECTS = 5
+
+    fun handleAppStart(context: Context) {
+        val applicationContext = context.applicationContext
+        val preferences = applicationContext.getSharedPreferences(
+            UPDATE_STATE_PREFERENCES,
+            Context.MODE_PRIVATE
+        )
+        val currentVersion = BuildConfig.VERSION_NAME
+        val lastVersion = preferences.getString(KEY_LAST_VERSION_NAME, null)
+        val pendingFromVersion = preferences.getString(KEY_PENDING_FROM_VERSION, null)
+        val pendingToVersion = preferences.getString(KEY_PENDING_TO_VERSION, null)
+        val legacyInternalUpdate = pendingToVersion == null &&
+            downloadedApkForVersion(applicationContext, currentVersion).isFile
+        val pendingInstallCompleted =
+            pendingToVersion == currentVersion &&
+                pendingFromVersion != null &&
+                pendingFromVersion != currentVersion
+        val completedInternalUpdate = pendingInstallCompleted || legacyInternalUpdate
+        val versionChanged = lastVersion != null && lastVersion != currentVersion
+
+        if (completedInternalUpdate || versionChanged) {
+            val previousVersion = pendingFromVersion
+                ?.takeIf { completedInternalUpdate && it != currentVersion }
+                ?: lastVersion?.takeIf { it != currentVersion }
+            val source = if (completedInternalUpdate) "internal" else "external"
+
+            DiagnosticLogger.log(
+                applicationContext,
+                "APP_UPDATED",
+                "fromVersion=${previousVersion ?: "unknown"}, " +
+                    "toVersion=$currentVersion, source=$source"
+            )
+            DiagnosticLogger.appendVersionHeader(applicationContext)
+            cleanupDownloadedUpdates(applicationContext)
+        }
+
+        preferences.edit()
+            .putString(KEY_LAST_VERSION_NAME, currentVersion)
+            .apply {
+                if (completedInternalUpdate || versionChanged) {
+                    remove(KEY_PENDING_FROM_VERSION)
+                    remove(KEY_PENDING_TO_VERSION)
+                }
+            }
+            .commit()
+    }
+
+    fun markInstallPending(context: Context, targetVersion: String) {
+        context.applicationContext
+            .getSharedPreferences(UPDATE_STATE_PREFERENCES, Context.MODE_PRIVATE)
+            .edit()
+            .putString(KEY_PENDING_FROM_VERSION, BuildConfig.VERSION_NAME)
+            .putString(KEY_PENDING_TO_VERSION, targetVersion)
+            .commit()
+    }
+
+    fun clearPendingInstall(context: Context, targetVersion: String) {
+        val preferences = context.applicationContext.getSharedPreferences(
+            UPDATE_STATE_PREFERENCES,
+            Context.MODE_PRIVATE
+        )
+        if (preferences.getString(KEY_PENDING_TO_VERSION, null) != targetVersion) {
+            return
+        }
+
+        preferences.edit()
+            .remove(KEY_PENDING_FROM_VERSION)
+            .remove(KEY_PENDING_TO_VERSION)
+            .commit()
+    }
 
     fun download(context: Context, update: AvailableUpdate): File {
         val updateDirectory = File(context.filesDir, UPDATE_DIRECTORY)
@@ -50,6 +124,28 @@ internal object UpdateInstaller {
         } finally {
             connection.disconnect()
         }
+    }
+
+    private fun cleanupDownloadedUpdates(context: Context) {
+        val updateDirectory = File(context.filesDir, UPDATE_DIRECTORY)
+        if (!updateDirectory.exists()) {
+            return
+        }
+
+        if (updateDirectory.deleteRecursively()) {
+            DiagnosticLogger.log(context, "UPDATE_APK_CLEANED")
+        } else {
+            DiagnosticLogger.log(
+                context,
+                "UPDATE_APK_CLEANUP_FAILED",
+                "directory=${updateDirectory.name}"
+            )
+        }
+    }
+
+    private fun downloadedApkForVersion(context: Context, version: String): File {
+        val safeVersion = version.replace(Regex("[^0-9A-Za-z._-]"), "_")
+        return File(File(context.filesDir, UPDATE_DIRECTORY), "kinewall-$safeVersion.apk")
     }
 
     private fun openDownloadConnection(initialUrl: String): HttpURLConnection {

@@ -35,6 +35,7 @@ class WallpaperLibraryViewModel(application: Application) : AndroidViewModel(app
             }
         }
         viewModelScope.launch(Dispatchers.IO) {
+            migrateManagedMediaUris()
             recoverInterruptedProcessing()
             storage.cleanupTranscodeCache()
             storage.cleanupStalePendingMedia()
@@ -379,7 +380,8 @@ class WallpaperLibraryViewModel(application: Application) : AndroidViewModel(app
 
     fun syncRuntimeState(kineWallIsActive: Boolean) {
         viewModelScope.launch {
-            val active = runtimeStore.read(WallpaperRuntimeRole.ACTIVE).takeIf { kineWallIsActive }
+            val activeSnapshot = runtimeStore.readExact(WallpaperRuntimeRole.ACTIVE)
+            val active = activeSnapshot.takeIf { kineWallIsActive }
             val preview = runtimeStore.readExact(WallpaperRuntimeRole.PREVIEW)
 
             preview?.wallpaperId?.let { wallpaperId ->
@@ -408,18 +410,79 @@ class WallpaperLibraryViewModel(application: Application) : AndroidViewModel(app
             }
 
             _state.update { it.copy(appliedWallpaperId = active?.wallpaperId) }
-            if (!kineWallIsActive) {
-                if (preview == null) {
-                    runtimeStore.clearActive()
-                } else {
-                    DiagnosticLogger.log(
-                        getApplication(),
-                        "WALLPAPER_RUNTIME_ACTIVE_RETAINED_FOR_HANDOFF",
-                        "wallpaperId=${preview.wallpaperId}, generation=${preview.generation}"
-                    )
-                }
+            if (!kineWallIsActive && activeSnapshot != null) {
+                DiagnosticLogger.log(
+                    getApplication(),
+                    if (preview != null) {
+                        "WALLPAPER_RUNTIME_ACTIVE_RETAINED_FOR_HANDOFF"
+                    } else {
+                        "WALLPAPER_RUNTIME_ACTIVE_PRESERVED_WHILE_SYSTEM_INACTIVE"
+                    },
+                    "wallpaperId=${activeSnapshot.wallpaperId}, " +
+                        "generation=${activeSnapshot.generation}"
+                )
             }
             runtimeStore.clearPreview()
+        }
+    }
+
+    private suspend fun migrateManagedMediaUris() {
+        var markerReference: String? = null
+        var migrationBlocked = false
+
+        dao.getAll().forEach { wallpaper ->
+            fun migrate(uri: String?): String? {
+                val migrated = storage.stableManagedUri(uri)
+                if (storage.needsStableUriMigration(uri) && migrated == uri) {
+                    migrationBlocked = true
+                }
+                return migrated
+            }
+
+            val originalUri = migrate(wallpaper.originalUri) ?: wallpaper.originalUri
+            val optimizedUri = migrate(wallpaper.optimizedUri)
+            val retainedOptimizedUri = migrate(wallpaper.retainedOptimizedUri)
+
+            markerReference = markerReference ?: listOfNotNull(
+                originalUri,
+                optimizedUri,
+                retainedOptimizedUri
+            ).firstOrNull { uri ->
+                storage.stableManagedUri(uri) == uri && !storage.needsStableUriMigration(uri)
+            }
+
+            if (
+                originalUri != wallpaper.originalUri ||
+                optimizedUri != wallpaper.optimizedUri ||
+                retainedOptimizedUri != wallpaper.retainedOptimizedUri
+            ) {
+                dao.upsert(
+                    wallpaper.copy(
+                        originalUri = originalUri,
+                        optimizedUri = optimizedUri,
+                        retainedOptimizedUri = retainedOptimizedUri,
+                        updatedAt = System.currentTimeMillis()
+                    )
+                )
+            }
+        }
+
+        runtimeStore.migrateVideoUris { uri ->
+            storage.stableManagedUri(uri) ?: uri
+        }
+
+        markerReference = markerReference
+            ?: runtimeStore.readExact(WallpaperRuntimeRole.ACTIVE)?.videoUri
+            ?: runtimeStore.readExact(WallpaperRuntimeRole.PREVIEW)?.videoUri
+
+        if (migrationBlocked) {
+            DiagnosticLogger.log(
+                getApplication(),
+                "LIBRARY_NOMEDIA_MIGRATION_DEFERRED",
+                "A MediaStore video URI could not be converted to a stable Files URI."
+            )
+        } else {
+            storage.ensureNoMediaForManagedUri(markerReference)
         }
     }
 

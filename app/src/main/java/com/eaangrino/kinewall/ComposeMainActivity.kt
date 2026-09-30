@@ -35,9 +35,9 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -85,6 +85,7 @@ class ComposeMainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
 
         DiagnosticLogger.initialize(this)
+        UpdateInstaller.handleAppStart(this)
         DiagnosticLogger.log(this, "ACTIVITY_CREATED")
         enableEdgeToEdge()
         UpdateCheckScheduler.ensureScheduled(this)
@@ -288,9 +289,11 @@ class ComposeMainActivity : ComponentActivity() {
         }
 
         try {
+            UpdateInstaller.markInstallPending(this, version)
             DiagnosticLogger.log(this, "UPDATE_INSTALLER_OPENED", "version=$version")
             startActivity(installIntent)
         } catch (error: Exception) {
+            UpdateInstaller.clearPendingInstall(this, version)
             DiagnosticLogger.log(
                 this,
                 "UPDATE_INSTALLER_OPEN_FAILED",
@@ -454,10 +457,12 @@ class ComposeMainActivity : ComponentActivity() {
             topBar = {
                 TopAppBar(
                     title = {
+                        val appName = stringResource(R.string.app_name)
                         val title = if (destination == MainDestination.WALLPAPER) {
-                            "${stringResource(R.string.app_name)} · ${stringResource(R.string.screen_title)}"
+                            val screenTitle = stringResource(R.string.screen_title)
+                            "$appName · $screenTitle"
                         } else {
-                            stringResource(R.string.app_name)
+                            appName
                         }
                         Text(
                             text = title,

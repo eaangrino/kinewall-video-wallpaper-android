@@ -128,14 +128,6 @@ class VideoWallpaperService : WallpaperService() {
         private val preferenceChangeListener =
             SharedPreferences.OnSharedPreferenceChangeListener { _, key ->
                 when (key) {
-                    KEY_VIDEO_URI -> mainHandler.post {
-                        runtimeSnapshot = null
-                        reloadConfiguredVideo(
-                            reason = "preference_changed_$key",
-                            preservePosition = false
-                        )
-                    }
-
                     KEY_SCALE_MODE,
                     KEY_CROP_POSITION_X,
                     KEY_CROP_POSITION_Y -> mainHandler.post {
@@ -1167,8 +1159,7 @@ class VideoWallpaperService : WallpaperService() {
             return latestSnapshot
         }
 
-        private fun configuredVideoUriString(): String? =
-            currentRuntimeSnapshot()?.videoUri ?: preferences.getString(KEY_VIDEO_URI, null)
+        private fun configuredVideoUriString(): String? = currentRuntimeSnapshot()?.videoUri
 
         private fun currentScaleMode(): String =
             currentRuntimeSnapshot()?.scaleMode
@@ -1349,7 +1340,6 @@ class VideoWallpaperService : WallpaperService() {
 
     companion object {
         private const val PREFERENCES_NAME = "kinewall_preferences"
-        private const val KEY_VIDEO_URI = "video_uri"
         private const val KEY_SCALE_MODE = "scale_mode"
         private const val KEY_CROP_POSITION_X = "crop_position_x"
         private const val KEY_CROP_POSITION_Y = "crop_position_y"
