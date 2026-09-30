@@ -313,6 +313,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                     },
                     onDownload = ::downloadLog,
                     onShare = ::shareLog,
+                    onReport = ::reportLog,
                     onDelete = { deleteCandidates = setOf(it) }
                 )
             } else {
@@ -393,6 +394,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         onSelectionToggle: (String) -> Unit,
         onDownload: (String) -> Unit,
         onShare: (String) -> Unit,
+        onReport: (String) -> Unit,
         onDelete: (String) -> Unit
     ) {
         BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -485,6 +487,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                                 onSelectionToggle = { onSelectionToggle(log.name) },
                                 onDownload = { onDownload(log.name) },
                                 onShare = { onShare(log.name) },
+                                onReport = { onReport(log.name) },
                                 onDelete = { onDelete(log.name) }
                             )
                         }
@@ -504,6 +507,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         onSelectionToggle: () -> Unit,
         onDownload: () -> Unit,
         onShare: () -> Unit,
+        onReport: () -> Unit,
         onDelete: () -> Unit
     ) {
         var menuExpanded by remember { mutableStateOf(false) }
@@ -577,6 +581,10 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                                     menuExpanded = false
                                     onShare()
                                 },
+                                onReport = {
+                                    menuExpanded = false
+                                    onReport()
+                                },
                                 onView = {
                                     menuExpanded = false
                                     onView()
@@ -623,6 +631,13 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
                     }
                 )
                 DropdownMenuItem(
+                    text = { Text(stringResource(R.string.report)) },
+                    onClick = {
+                        expanded = false
+                        reportLog(fileName)
+                    }
+                )
+                DropdownMenuItem(
                     text = { Text(stringResource(R.string.delete)) },
                     onClick = {
                         expanded = false
@@ -637,6 +652,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
     private fun LogActionItems(
         onDownload: () -> Unit,
         onShare: () -> Unit,
+        onReport: () -> Unit,
         onView: () -> Unit,
         onDelete: () -> Unit
     ) {
@@ -647,6 +663,10 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         DropdownMenuItem(
             text = { Text(stringResource(R.string.share)) },
             onClick = onShare
+        )
+        DropdownMenuItem(
+            text = { Text(stringResource(R.string.report)) },
+            onClick = onReport
         )
         DropdownMenuItem(
             text = { Text(stringResource(R.string.view)) },
@@ -757,6 +777,80 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
         }
     }
 
+    private fun reportLog(fileName: String) {
+        try {
+            val content = DiagnosticLogger.readLogChunk(this, fileName, 0L).content
+            val reportBody = buildDiagnosticReport(content)
+            val reportIntent = Intent(Intent.ACTION_SEND).apply {
+                type = "text/plain"
+                putExtra(Intent.EXTRA_SUBJECT, getString(R.string.diagnostic_report_subject))
+                putExtra(Intent.EXTRA_TEXT, reportBody)
+            }
+
+            DiagnosticLogger.log(
+                this,
+                "DIAGNOSTIC_LOG_REPORT_REQUESTED",
+                "file=$fileName"
+            )
+            startActivity(
+                Intent.createChooser(
+                    reportIntent,
+                    getString(R.string.report_diagnostic_log)
+                )
+            )
+        } catch (error: Exception) {
+            DiagnosticLogger.log(
+                this,
+                "DIAGNOSTIC_LOG_REPORT_FAILED",
+                "file=$fileName",
+                error
+            )
+            Toast.makeText(
+                this,
+                R.string.diagnostic_log_report_failed,
+                Toast.LENGTH_LONG
+            ).show()
+        }
+    }
+
+    private fun buildDiagnosticReport(content: String): String {
+        val truncated = content.length > REPORT_LOG_MAX_CHARS
+        val reportLog = if (truncated) {
+            val tailChars = REPORT_LOG_MAX_CHARS - REPORT_LOG_HEAD_CHARS
+            buildString {
+                append(content.take(REPORT_LOG_HEAD_CHARS).trimEnd())
+                append("\n\n... KineWall diagnostic log truncated ...\n\n")
+                append(content.takeLast(tailChars).trimStart())
+            }
+        } else {
+            content
+        }
+
+        return buildString {
+            appendLine("## Description")
+            appendLine()
+            appendLine("Describe the problem here.")
+            appendLine()
+            appendLine("## Diagnostic log")
+            appendLine()
+            if (truncated) {
+                appendLine(
+                    "> KineWall truncated this log for sharing. " +
+                        "The header and most recent entries are included."
+                )
+                appendLine()
+            }
+            appendLine("<details>")
+            appendLine("<summary>Show diagnostic log</summary>")
+            appendLine()
+            appendLine("````text")
+            appendLine(reportLog.trimEnd())
+            appendLine("````")
+            appendLine()
+            append("</details>")
+        }
+    }
+
     private fun deleteLogs(fileNames: Set<String>): Boolean = try {
         val singleFileName = fileNames.singleOrNull()
         DiagnosticLogger.log(
@@ -810,5 +904,7 @@ class ComposeDiagnosticsActivity : ComponentActivity() {
     companion object {
         private const val LIVE_REFRESH_INTERVAL_MS = 1_000L
         private const val STATE_PENDING_DOWNLOAD = "pending_download_log"
+        private const val REPORT_LOG_MAX_CHARS = 48_000
+        private const val REPORT_LOG_HEAD_CHARS = 4_000
     }
 }
